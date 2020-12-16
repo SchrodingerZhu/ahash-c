@@ -25,6 +25,7 @@
 #include <immintrin.h>
 #include <wmmintrin.h>
 typedef __m128i aes128_t;
+#define AES_OR(a, b) (_mm_or_si128(a, b))
 #elif (defined(__arm64__) || defined(__aarch64__) ||  defined(_M_ARM64)) &&       \
     defined(__ARM_NEON) && defined(__ARM_FEATURE_CRYPTO)
 #define ARM_TARGET
@@ -34,6 +35,7 @@ typedef __m128i aes128_t;
 #include <arm_neon.h>
 #endif
 typedef uint8x16_t aes128_t;
+#define AES_OR(a, b) (veorq_u8(a, b))
 #else
 #define USE_FALLBACK
 #endif
@@ -66,12 +68,25 @@ static FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
 #ifdef x86_64_TARGET
   return _mm_add_epi64(shuffle(x), y);
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
-    return vaddq_u64(shuffle(x), y);
+    return vaddq_s64(shuffle(x), y);
 #elif defined(ARM_TARGET)
-  return (aes128_t)vaddq_u64((uint64x2_t)shuffle(x), (uint64x2_t)y);
+  return (aes128_t)vaddq_s64((int64x2_t)shuffle(x), (int64x2_t)y);
 #elif
-  typedef uint64_t v64ui __attribute__((vector_size(16)));
-  return (aes128_t)((v64ui)(shuffle(x)) + (v64ui)(y));
+  typedef uint64_t v64i __attribute__((vector_size(16)));
+  return (aes128_t)((v64i)(shuffle(x)) + (v64i)(y));
+#endif
+}
+
+static FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
+#ifdef x86_64_TARGET
+    return _mm_add_epi64(x, y);
+#elif defined(ARM_TARGET) && defined(_MSC_VER)
+    return vaddq_s64(x, y);
+#elif defined(ARM_TARGET)
+  return (aes128_t)vaddq_s64((int64x2_t)x, (int64x2_t)y);
+#elif
+  typedef int64_t v64i __attribute__((vector_size(16)));
+  return (aes128_t)((v64i)(x) + (v64i)(y));
 #endif
 }
 

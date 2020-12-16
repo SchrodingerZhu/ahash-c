@@ -3,5 +3,5 @@ project(ahash C)
 
 set(CMAKE_C_STANDARD 11)
 include_directories(.)
-add_library(ahash ahash.c)
+add_library(ahash ahash.c random_state.c)
 add_executable(test_aes tests/test_aes.c)
