@@ -94,12 +94,12 @@ static FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
 #ifdef x86_64_TARGET
   return shuffle(_mm_add_epi64(x, y));
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
-    return shuffle(vaddq_u64(x, y));
+    return shuffle(vaddq_s64(x, y));
 #elif defined(ARM_TARGET)
-  return shuffle((aes128_t)vaddq_u64((uint64x2_t)(x), (uint64x2_t)y));
+  return shuffle((aes128_t)vaddq_s64((int64x2_t)(x), (int64x2_t)y));
 #elif
-  typedef u_int64_t v64ui __attribute__((vector_size(16)));
-  return shuffle((aes128_t)((v64ui)x + (v64ui)y));
+  typedef int64_t v64i __attribute__((vector_size(16)));
+  return shuffle((aes128_t)((v64i)x + (v64i)y));
 #endif
 }
 
