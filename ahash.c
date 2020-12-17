@@ -11,21 +11,22 @@ ahasher_t new_with_key(aes128_t key1, aes128_t key2) {
   return result;
 }
 
-ahasher_t new_from_random_state(random_state_t *state) {
+ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64_t k3) {
   aes128_t key1, key2;
 #ifdef x86_64_TARGET
-  key1 = _mm_set_epi64x(state->keys[0], state->keys[1]);
-  key2 = _mm_set_epi64x(state->keys[2], state->keys[3]);
+  key1 = _mm_set_epi64x(k1, k0);
+  key2 = _mm_set_epi64x(k3, k2);
 #else
-  key1 = (aes128_t)vld1q_u64(state->keys);
-  key2 = (aes128_t)vld1q_u64(state->keys + 2);
+  uint64_t keys[4] = {k0, k1, k2, k3};
+  key1 = (aes128_t)vld1q_u64(keys);
+  key2 = (aes128_t)vld1q_u64(keys + 2);
 #endif
   return new_with_key(key1, key2);
 }
 
 static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(b, 0);
+  aes128_t temp = _mm_set_epi64x(0, b);
   return _mm_add_epi64(a, temp);
 #else
   uint64_t temp[2] = {b, 0};
@@ -36,7 +37,7 @@ static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
 
 static FAST_PATH aes128_t add_high(aes128_t a, uint64_t b) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(0, b);
+  aes128_t temp = _mm_set_epi64x(b, 0);
   return _mm_add_epi64(a, temp);
 #else
   uint64_t temp[2] = {0, b};
@@ -66,7 +67,7 @@ ahasher_t hash2(ahasher_t hasher, aes128_t v1, aes128_t v2) {
 
 ahasher_t write_uint64_t(ahasher_t hasher, uint64_t value) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(0, value);
+  aes128_t temp = _mm_set_epi64x(value, 0);
   return hash1(hasher, temp);
 #else
   uint64_t temp[2] = {0, value};
@@ -88,7 +89,7 @@ WRITABLE(uint32_t)
 WRITABLE(int32_t)
 WRITABLE(int64_t)
 
-ahasher_t write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
+ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
   hasher = add_length(hasher, size);
 
   if (size < 8) {
@@ -110,7 +111,7 @@ ahasher_t write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
       }
     }
 #ifdef x86_64_TARGET
-    aes128_t temp = _mm_set_epi64x(data[0], data[1]);
+    aes128_t temp = _mm_set_epi64x(data[1], data[0]);
 #else
     aes128_t temp = (aes128_t)vld1q_u64(data);
 #endif
@@ -216,7 +217,7 @@ ahasher_t write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
         data[0] = *(uint64_t *)input;
         data[1] = *(uint64_t *)((uint8_t *)input + size - sizeof(uint64_t));
 #ifdef x86_64_TARGET
-        aes128_t temp = _mm_set_epi64x(data[0], data[1]);
+        aes128_t temp = _mm_set_epi64x(data[1], data[0]);
 #else
         aes128_t temp = (aes128_t)vld1q_u64(data);
 #endif
@@ -225,5 +226,29 @@ ahasher_t write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
     }
   }
 }
-#elif
+
+uint64_t finish(ahasher_t hasher) {
+    aes128_t combined = aes_decode(hasher.sum, hasher.enc);
+    aes128_t result = aes_encode(aes_encode(combined, hasher.key), combined);
+#ifdef x86_64_TARGET
+    return _mm_cvtsi128_si64(result);
+#else
+    return vgetq_lane_u64((uint64x2_t)(result), 0);
+#endif
+}
+
+uint64_t ahash64(const void *buf, size_t size, uint64_t seed) {
+    uint64_t keys[4] = {
+            0x243f6a8885a308d3ull + seed,
+            0x13198a2e03707344ull ^ seed,
+            0xa4093822299f31d0ull,
+            0x082efa98ec4e6c89ull,
+    };
+    random_state_t state = new_state_from_keys (PI, keys);
+    ahasher_t ahasher = CREATE_HASHER(state);
+    ahasher = hash_write(ahasher, buf, size);
+    return finish(ahasher);
+}
+
+#else
 #endif

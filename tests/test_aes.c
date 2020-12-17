@@ -2,8 +2,11 @@
 // Created by schrodinger on 12/16/20.
 //
 #include <definitions.h>
+#include <random_state.h>
+#include <ahash.h>
 #include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 void shuffle_no_collide_with_aes() {
 #ifndef USE_FALLBACK
@@ -34,7 +37,56 @@ void shuffle_no_collide_with_aes() {
 #endif
 }
 
+void unique() {
+    random_state_t a = new_state(), b = new_state();
+    uint64_t ra = finish(CREATE_HASHER(a)),
+             rb = finish(CREATE_HASHER(b));
+    printf("unique test: ra=%lu, rb=%lu\n", ra, rb);
+    assert(ra != rb);
+}
+
+void same() {
+    random_state_t a = new_state();
+    ahasher_t x = CREATE_HASHER(a), y = CREATE_HASHER(a);
+    uint64_t address = (uint64_t)same;
+    x = write_uint64_t(x, address);
+    y = write_uint64_t(y, address);
+    uint64_t rx = finish(x),
+             ry = finish(y);
+    printf("same test: rx=%lu, ry=%lu\n", rx, ry);
+    assert(rx == ry);
+}
+
+char* generate_random_strings(size_t count, size_t length) {
+    char* string = (char *)malloc(length * count);
+    for(size_t i = 0; i < count; ++i) {
+        for(size_t j = 0; j < length; ++j) {
+            string[i * length + j] = (char )rand() ^ (char)(time(0));
+        }
+    }
+    return string;
+}
+
+void hash_string_bench() {
+    clock_t start, end;
+    double cpu_time_used;
+    char* tasks = generate_random_strings(1000000, 1000);
+    start = clock();
+    random_state_t state = new_state();
+    ahasher_t hasher = CREATE_HASHER(state);
+    uint64_t res = 0;
+    for(size_t i = 0; i < 1000000; ++i) {
+        ahasher_t temp = hash_write(hasher, tasks + i * 1000, 1000);
+        res += finish(temp);
+    }
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1e9 / 1000000.0;
+    printf("esp time: %lf ns/1000bytes, res: %lu", cpu_time_used, res);
+}
 
 int main() {
     shuffle_no_collide_with_aes();
+    unique();
+    same();
+    hash_string_bench();
 }

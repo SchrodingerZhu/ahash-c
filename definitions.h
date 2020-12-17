@@ -5,6 +5,8 @@
 #ifndef AHASH_DEFINITIONS_H
 #define AHASH_DEFINITIONS_H
 #include <stdint.h>
+#include <stddef.h>
+
 
 #ifndef __has_builtin
 #define __has_builtin(x) 0
