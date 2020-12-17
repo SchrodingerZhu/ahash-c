@@ -199,35 +199,77 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         hasher = hash2(hasher, head[0], head[1]);
         return hash2(hasher, tail[0], tail[1]);
 #else // x86_64 VAES intruction set
-          aes256_t tail[2];
-          aes256_t current[2];
-          aes256_t sum;
-          tail[0] =
-                  _mm256_lddqu_si256((aes256_t *)(input + size - 2 * sizeof(aes256_t)));
-          tail[1] =
-                  _mm256_lddqu_si256((aes256_t *)(input + size - 1 * sizeof(aes256_t)));
-          current[0] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
-          current[1] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[1]);
-          sum = add_by_64s2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
-          sum = shuffle_add2(sum, tail[1]);
-          while (size > 64) {
-              tail[0] = _mm256_lddqu_si256((aes256_t *)(input + 0 * sizeof(aes256_t)));
-              tail[1] = _mm256_lddqu_si256((aes256_t *)(input + 1 * sizeof(aes256_t)));
-              current[0] = aes_encode2(current[0], tail[0]);
-              current[1] = aes_encode2(current[1], tail[1]);
-              sum = shuffle_add2(sum, tail[0]);
-              sum = shuffle_add2(sum, tail[1]);
-              size -= 64;
-              input = ((uint8_t *)input) + 64;
+#ifdef __AVX512DQ__
+          if (size > 128) {
+              aes512_t tail[2];
+              aes512_t current[2];
+              aes512_t sum;
+              tail[0] =
+                      _mm512_loadu_si512((aes512_t *) (input + size - 2 * sizeof(aes512_t)));
+              tail[1] =
+                      _mm512_loadu_si512((aes512_t *) (input + size - 1 * sizeof(aes512_t)));
+              aes128_t keys[4] = {hasher.key, hasher.key, hasher.key, hasher.key};
+              current[0] = aes_encode4(_mm512_loadu_si512(keys), tail[0]);
+              current[1] = aes_encode4(_mm512_loadu_si512(keys), tail[1]);
+              sum = add_by_64s4(_mm512_loadu_si512(keys), tail[0]);
+              sum = shuffle_add4(sum, tail[1]);
+              while (size > 128) {
+                  tail[0] = _mm512_loadu_si512((aes512_t *) (input + 0 * sizeof(aes512_t)));
+                  tail[1] = _mm512_loadu_si512((aes512_t *) (input + 1 * sizeof(aes512_t)));
+                  current[0] = aes_encode4(current[0], tail[0]);
+                  current[1] = aes_encode4(current[1], tail[1]);
+                  sum = shuffle_add4(sum, tail[0]);
+                  sum = shuffle_add4(sum, tail[1]);
+                  size -= 128;
+                  input = ((uint8_t *) input) + 128;
+              }
+              aes512_t encoded = aes_encode4(current[0], current[1]);
+              aes128_t current0 = _mm512_extracti64x2_epi64(encoded, 0);
+              aes128_t current1 = _mm512_extracti64x2_epi64(encoded, 1);
+              aes128_t current2 = _mm512_extracti64x2_epi64(encoded, 2);
+              aes128_t current3 = _mm512_extracti64x2_epi64(encoded, 3);
+              aes128_t sum0 = _mm512_extracti64x2_epi64(sum, 0);
+              aes128_t sum1 = _mm512_extracti64x2_epi64(sum, 1);
+              aes128_t sum2 = _mm512_extracti64x2_epi64(sum, 2);
+              aes128_t sum3 = _mm512_extracti64x2_epi64(sum, 3);
+              // no vex transition transition, no need to zero uppers
+              hasher = hash2(hasher, aes_encode(current0, current1), aes_encode(current2, current3));
+              return hash1(hasher, add_by_64s(add_by_64s(sum0, sum1), add_by_64s(sum2, sum3)));
           }
-          aes256_t encoded = aes_encode2(current[0], current[1]);
-          aes128_t current0 = _mm256_extractf128_si256(encoded, 0);
-          aes128_t current1 = _mm256_extractf128_si256(encoded, 1);
-          aes128_t sum0 = _mm256_extractf128_si256(sum, 0);
-          aes128_t sum1 = _mm256_extractf128_si256(sum, 1);
-          _mm256_zeroupper(); // avoid avx-sse transition penalty
-          hasher = hash2(hasher, current0, current1);
-          return hash1(hasher, add_by_64s(sum0, sum1));
+          else {
+#endif
+              aes256_t tail[2];
+              aes256_t current[2];
+              aes256_t sum;
+              tail[0] =
+                      _mm256_lddqu_si256((aes256_t *) (input + size - 2 * sizeof(aes256_t)));
+              tail[1] =
+                      _mm256_lddqu_si256((aes256_t *) (input + size - 1 * sizeof(aes256_t)));
+              current[0] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
+              current[1] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[1]);
+              sum = add_by_64s2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
+              sum = shuffle_add2(sum, tail[1]);
+              while (size > 64) {
+                  tail[0] = _mm256_lddqu_si256((aes256_t *) (input + 0 * sizeof(aes256_t)));
+                  tail[1] = _mm256_lddqu_si256((aes256_t *) (input + 1 * sizeof(aes256_t)));
+                  current[0] = aes_encode2(current[0], tail[0]);
+                  current[1] = aes_encode2(current[1], tail[1]);
+                  sum = shuffle_add2(sum, tail[0]);
+                  sum = shuffle_add2(sum, tail[1]);
+                  size -= 64;
+                  input = ((uint8_t *) input) + 64;
+              }
+              aes256_t encoded = aes_encode2(current[0], current[1]);
+              aes128_t current0 = _mm256_extractf128_si256(encoded, 0);
+              aes128_t current1 = _mm256_extractf128_si256(encoded, 1);
+              aes128_t sum0 = _mm256_extractf128_si256(sum, 0);
+              aes128_t sum1 = _mm256_extractf128_si256(sum, 1);
+              _mm256_zeroupper(); // avoid avx-sse transition penalty
+              hasher = hash2(hasher, current0, current1);
+              return hash1(hasher, add_by_64s(sum0, sum1));
+#ifdef __AVX512DQ__
+          }
+#endif
 #endif
       }
     } else {

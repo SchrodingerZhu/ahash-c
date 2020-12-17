@@ -20,13 +20,15 @@
 #else
 #define FAST_PATH inline
 #endif
-
 #if defined(__SSSE3__) &&  defined(__AES__)
 #define x86_TARGET
 #include <immintrin.h>
 #include <wmmintrin.h>
 #ifdef __VAES__
 typedef __m256i aes256_t;
+#ifdef __AVX512DQ__
+typedef __m512i aes512_t;
+#endif
 #endif
 typedef __m128i aes128_t;
 #define AES_OR(a, b) (_mm_or_si128(a, b))
@@ -63,6 +65,26 @@ static FAST_PATH aes256_t add_by_64s2(aes256_t x, aes256_t y) {
 static FAST_PATH aes256_t aes_encode2(aes256_t x, aes256_t y) {
     return _mm256_aesenc_epi128(x, y);
 }
+
+#ifdef __AVX512DQ__
+static FAST_PATH aes512_t shuffle4(aes512_t data) {
+    const aes512_t mask =
+            _mm512_set_epi64(0x020a07000c01030eull, 0x050f0d0806090b04ull,
+                              0x020a07000c01030eull, 0x050f0d0806090b04ull,
+                             0x020a07000c01030eull, 0x050f0d0806090b04ull,
+                             0x020a07000c01030eull, 0x050f0d0806090b04ull);
+    return _mm512_shuffle_epi8(data, mask);
+}
+static FAST_PATH aes512_t shuffle_add4(aes512_t x, aes512_t y) {
+    return _mm512_add_epi64(shuffle4(x), y);
+}
+static FAST_PATH aes512_t add_by_64s4(aes512_t x, aes512_t y) {
+    return _mm512_add_epi64(x, y);
+}
+static FAST_PATH aes512_t aes_encode4(aes512_t x, aes512_t y) {
+    return _mm512_aesenc_epi128(x, y);
+}
+#endif
 #endif
 
 static FAST_PATH aes128_t shuffle(aes128_t data) {
