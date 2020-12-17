@@ -105,8 +105,8 @@ void random_equal() {
     printf("testing strings\n");
     for(uint64_t i = 0; i < 233; ++i) {
         uint64_t seed = i ^ (uint64_t)&random_equal;
-        char* data = generate_random_strings(1, 255);
-        assert(ahash64(data, 5261, seed) == ahash64(data, 255, seed));
+        char* data = generate_random_strings(1, 5261);
+        assert(ahash64(data, 5261, seed) == ahash64(data, 5261, seed));
         free(data);
     }
 }
@@ -115,6 +115,6 @@ int main() {
     shuffle_no_collide_with_aes();
     unique();
     same();
-    hash_string_bench();
     random_equal();
+    hash_string_bench();
 }
