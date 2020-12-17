@@ -26,7 +26,7 @@
 #define x86_64_TARGET
 #include <immintrin.h>
 #include <wmmintrin.h>
-#ifdef __AVX512__
+#ifdef __VAES__
 typedef __m256i aes256_t;
 #endif
 typedef __m128i aes128_t;
@@ -48,7 +48,7 @@ typedef uint8x16_t aes128_t;
 
 #ifndef USE_FALLBACK
 
-#ifdef __AVX512__
+#if defined(__VAES__) && defined(x86_64_TARGET)
 static FAST_PATH aes256_t shuffle2(aes256_t data) {
     const aes256_t mask =
             _mm256_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull,

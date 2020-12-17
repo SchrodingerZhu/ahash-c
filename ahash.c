@@ -119,7 +119,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
   } else {
     if (size > 32) {
       if (size > 64) {
-#ifndef __AVX512__
+#if !(defined(__VAES__) && defined(x86_64_TARGET))
         aes128_t tail[4];
         aes128_t current[4];
         aes128_t sum[2];
@@ -199,7 +199,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
 #endif
         hasher = hash2(hasher, head[0], head[1]);
         return hash2(hasher, tail[0], tail[1]);
-#else
+#else // x86_64 VAES intruction set
           aes256_t tail[2];
           aes256_t current[2];
           aes256_t sum;
