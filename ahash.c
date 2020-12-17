@@ -26,7 +26,7 @@ ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64
 
 static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(0, b);
+  aes128_t temp = _mm_set_epi64x(b, 0);
   return _mm_add_epi64(a, temp);
 #else
   uint64_t temp[2] = {b, 0};
@@ -37,7 +37,7 @@ static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
 
 static FAST_PATH aes128_t add_high(aes128_t a, uint64_t b) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(b, 0);
+  aes128_t temp = _mm_set_epi64x(0, b);
   return _mm_add_epi64(a, temp);
 #else
   uint64_t temp[2] = {0, b};
@@ -67,7 +67,7 @@ ahasher_t hash2(ahasher_t hasher, aes128_t v1, aes128_t v2) {
 
 ahasher_t write_uint64_t(ahasher_t hasher, uint64_t value) {
 #ifdef x86_64_TARGET
-  aes128_t temp = _mm_set_epi64x(value, 0);
+  aes128_t temp = _mm_set_epi64x(0, value);
   return hash1(hasher, temp);
 #else
   uint64_t temp[2] = {0, value};
@@ -111,7 +111,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
       }
     }
 #ifdef x86_64_TARGET
-    aes128_t temp = _mm_set_epi64x(data[1], data[0]);
+    aes128_t temp = _mm_set_epi64x(data[0], data[1]);
 #else
     aes128_t temp = (aes128_t)vld1q_u64(data);
 #endif
@@ -249,7 +249,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         data[0] = *(uint64_t *)input;
         data[1] = *(uint64_t *)((uint8_t *)input + size - sizeof(uint64_t));
 #ifdef x86_64_TARGET
-        aes128_t temp = _mm_set_epi64x(data[1], data[0]);
+        aes128_t temp = _mm_set_epi64x(data[0], data[1]);
 #else
         aes128_t temp = (aes128_t)vld1q_u64(data);
 #endif
