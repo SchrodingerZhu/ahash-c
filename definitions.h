@@ -26,6 +26,9 @@
 #define x86_64_TARGET
 #include <immintrin.h>
 #include <wmmintrin.h>
+#ifdef __AVX512__
+typedef __m256i aes256_t;
+#endif
 typedef __m128i aes128_t;
 #define AES_OR(a, b) (_mm_or_si128(a, b))
 #elif (defined(__arm64__) || defined(__aarch64__) ||  defined(_M_ARM64)) &&       \
@@ -44,6 +47,24 @@ typedef uint8x16_t aes128_t;
 
 
 #ifndef USE_FALLBACK
+
+#ifdef __AVX512__
+static FAST_PATH aes256_t shuffle2(aes256_t data) {
+    const aes256_t mask =
+            _mm256_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull,
+                              0x020a07000c01030eull, 0x050f0d0806090b04ull);
+    return _mm256_shuffle_epi8(data, mask);
+}
+static FAST_PATH aes256_t shuffle_add2(aes256_t x, aes256_t y) {
+    return _mm256_add_epi64(shuffle2(x), y);
+}
+static FAST_PATH aes256_t add_by_64s2(aes256_t x, aes256_t y) {
+    return _mm256_add_epi64(x, y);
+}
+static FAST_PATH aes256_t aes_encode2(aes256_t x, aes256_t y) {
+    return _mm256_aesenc_epi128(x, y);
+}
+#endif
 
 static FAST_PATH aes128_t shuffle(aes128_t data) {
 #ifdef x86_64_TARGET

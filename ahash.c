@@ -119,10 +119,11 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
   } else {
     if (size > 32) {
       if (size > 64) {
+#ifndef __AVX512__
         aes128_t tail[4];
         aes128_t current[4];
         aes128_t sum[2];
-#ifdef x86_64_TARGET
+#if defined(x86_64_TARGET)
         tail[0] = /// TODO: whether _mm_lddqu_si128 is good enough here for unaligned access
             _mm_lddqu_si128((aes128_t *)(input + size - 4 * sizeof(aes128_t)));
         tail[1] =
@@ -147,8 +148,8 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         current[3] = aes_encode(hasher.key, tail[3]);
         sum[0] = add_by_64s(hasher.key, tail[0]);
         sum[1] = add_by_64s(hasher.key, tail[1]);
-        sum[0] = shuffle_add(hasher.key, tail[2]);
-        sum[1] = shuffle_add(hasher.key, tail[3]);
+        sum[0] = shuffle_add(sum[0], tail[2]);
+        sum[1] = shuffle_add(sum[1], tail[3]);
         while (size > 64) {
 #ifdef x86_64_TARGET
           tail[0] = _mm_lddqu_si128((aes128_t *)(input + 0 * sizeof(aes128_t)));
@@ -198,6 +199,37 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
 #endif
         hasher = hash2(hasher, head[0], head[1]);
         return hash2(hasher, tail[0], tail[1]);
+#else
+          aes256_t tail[2];
+          aes256_t current[2];
+          aes256_t sum;
+          tail[0] =
+                  _mm256_lddqu_si256((aes256_t *)(input + size - 2 * sizeof(aes256_t)));
+          tail[1] =
+                  _mm256_lddqu_si256((aes256_t *)(input + size - 1 * sizeof(aes256_t)));
+          current[0] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
+          current[1] = aes_encode2(_mm256_set_m128i(hasher.key, hasher.key), tail[1]);
+          sum = add_by_64s2(_mm256_set_m128i(hasher.key, hasher.key), tail[0]);
+          sum = shuffle_add2(sum, tail[1]);
+          while (size > 64) {
+              tail[0] = _mm256_lddqu_si256((aes256_t *)(input + 0 * sizeof(aes256_t)));
+              tail[1] = _mm256_lddqu_si256((aes256_t *)(input + 1 * sizeof(aes256_t)));
+              current[0] = aes_encode2(current[0], tail[0]);
+              current[1] = aes_encode2(current[1], tail[1]);
+              sum = shuffle_add2(sum, tail[0]);
+              sum = shuffle_add2(sum, tail[1]);
+              size -= 64;
+              input = ((uint8_t *)input) + 64;
+          }
+          aes256_t encoded = aes_encode2(current[0], current[1]);
+          aes128_t current0 = _mm256_extractf128_si256(encoded, 0);
+          aes128_t current1 = _mm256_extractf128_si256(encoded, 1);
+          aes128_t sum0 = _mm256_extractf128_si256(sum, 0);
+          aes128_t sum1 = _mm256_extractf128_si256(sum, 1);
+          _mm256_zeroupper(); // avoid avx-sse transition penalty
+          hasher = hash2(hasher, current0, current1);
+          return hash1(hasher, add_by_64s(sum0, sum1));
+#endif
       }
     } else {
       if (size > 16) {
