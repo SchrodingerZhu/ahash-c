@@ -21,9 +21,8 @@
 #define FAST_PATH inline
 #endif
 
-#if (defined(__amd64__) || defined(_WIN64)) && defined(__SSSE3__) &&           \
-    defined(__AES__)
-#define x86_64_TARGET
+#if defined(__SSSE3__) &&  defined(__AES__)
+#define x86_TARGET
 #include <immintrin.h>
 #include <wmmintrin.h>
 #ifdef __VAES__
@@ -48,7 +47,7 @@ typedef uint8x16_t aes128_t;
 
 #ifndef USE_FALLBACK
 
-#if defined(__VAES__) && defined(x86_64_TARGET)
+#if defined(__VAES__) && defined(x86_TARGET)
 static FAST_PATH aes256_t shuffle2(aes256_t data) {
     const aes256_t mask =
             _mm256_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull,
@@ -67,7 +66,7 @@ static FAST_PATH aes256_t aes_encode2(aes256_t x, aes256_t y) {
 #endif
 
 static FAST_PATH aes128_t shuffle(aes128_t data) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
   const aes128_t mask =
       _mm_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull);
   return _mm_shuffle_epi8(data, mask);
@@ -88,7 +87,7 @@ static FAST_PATH aes128_t shuffle(aes128_t data) {
 }
 
 static FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
   return _mm_add_epi64(shuffle(x), y);
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
     return vaddq_s64(shuffle(x), y);
@@ -101,7 +100,7 @@ static FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
 }
 
 static FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
     return _mm_add_epi64(x, y);
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
     return vaddq_s64(x, y);
@@ -114,7 +113,7 @@ static FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
 }
 
 static FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
   return shuffle(_mm_add_epi64(x, y));
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
     return shuffle(vaddq_s64(x, y));
@@ -127,7 +126,7 @@ static FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
 }
 
 static FAST_PATH aes128_t aes_encode(aes128_t x, aes128_t y) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
   return _mm_aesenc_si128(x, y);
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
   static const unsigned long zero[2] = {0, 0};
@@ -138,7 +137,7 @@ static FAST_PATH aes128_t aes_encode(aes128_t x, aes128_t y) {
 }
 
 static FAST_PATH aes128_t aes_decode(aes128_t x, aes128_t y) {
-#ifdef x86_64_TARGET
+#ifdef x86_TARGET
   return _mm_aesdec_si128(x, y);
 #elif defined(ARM_TARGET) && defined(_MSC_VER)
   static const unsigned long zero[2] = {0, 0};
