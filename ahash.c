@@ -244,8 +244,7 @@ uint64_t ahash64(const void *buf, size_t size, uint64_t seed) {
             0xa4093822299f31d0ull,
             0x082efa98ec4e6c89ull,
     };
-    random_state_t state = new_state_from_keys (PI, keys);
-    ahasher_t ahasher = CREATE_HASHER(state);
+    ahasher_t ahasher = hasher_from_random_state(keys[0], keys[1], keys[2], keys[3]);
     ahasher = hash_write(ahasher, buf, size);
     return finish(ahasher);
 }
