@@ -8,6 +8,11 @@
 #include <stdio.h>
 #include <time.h>
 
+
+#define ASSERT(x) do { \
+  if (!x) { fflush(stdout); abort(); }                     \
+} while (0);
+
 void shuffle_no_collide_with_aes() {
 #ifndef USE_FALLBACK
     uint8_t value[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
