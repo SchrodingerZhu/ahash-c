@@ -91,7 +91,6 @@ WRITABLE(int64_t)
 
 ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t size) {
   hasher = add_length(hasher, size);
-
   if (size < 8) {
     uint64_t data[2];
     if (size >= 2) {

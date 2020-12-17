@@ -70,18 +70,45 @@ char* generate_random_strings(size_t count, size_t length) {
 void hash_string_bench() {
     clock_t start, end;
     double cpu_time_used;
-    char* tasks = generate_random_strings(1000000, 1000);
+    char* tasks = generate_random_strings(10000, 1000);
     start = clock();
     random_state_t state = new_state();
     ahasher_t hasher = CREATE_HASHER(state);
+    printf("start perf\n");
     uint64_t res = 0;
-    for(size_t i = 0; i < 1000000; ++i) {
+    for(size_t i = 0; i < 10000; ++i) {
         ahasher_t temp = hash_write(hasher, tasks + i * 1000, 1000);
         res += finish(temp);
     }
     end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1e9 / 1000000.0;
-    printf("esp time: %lf ns/1000bytes, res: %lu", cpu_time_used, res);
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1e9 / 10000.0;
+    printf("esp time: %lf ns/1000bytes, res: %lu\n", cpu_time_used, res);
+    free(tasks);
+}
+
+void random_equal() {
+    printf("testing byte using write\n");
+    for(uint8_t i = 0; i < 255; ++i) {
+        assert(ahash64(&i, sizeof(uint8_t), i) == ahash64(&i, sizeof(uint8_t), i));
+    }
+    printf("testing int using write\n");
+    for(int i = 0; i < 65536; ++i) {
+        assert(ahash64(&i, sizeof(int), i) == ahash64(&i, sizeof(int), i));
+    }
+    printf("testing different states\n");
+    for(int i = 0; i < 65536; ++i) {
+        random_state_t state = new_state();
+        ahasher_t hasher1 = CREATE_HASHER(state);
+        ahasher_t hasher2 = CREATE_HASHER(state);
+        assert(finish(write_uint64_t(hasher1, i)) == finish(write_uint64_t(hasher2, i)));
+    }
+    printf("testing strings\n");
+    for(uint64_t i = 0; i < 233; ++i) {
+        uint64_t seed = i ^ (uint64_t)&random_equal;
+        char* data = generate_random_strings(1, 255);
+        assert(ahash64(data, 5261, seed) == ahash64(data, 255, seed));
+        free(data);
+    }
 }
 
 int main() {
@@ -89,4 +116,5 @@ int main() {
     unique();
     same();
     hash_string_bench();
+    random_equal();
 }
