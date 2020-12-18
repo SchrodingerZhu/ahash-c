@@ -7,7 +7,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <time.h>
-
+#include <stdlib.h>
 
 #define ASSERT(x) do { \
   if (!x) { fflush(stdout); abort(); }                     \

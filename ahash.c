@@ -311,6 +311,116 @@ uint64_t finish(ahasher_t hasher) {
     return vgetq_lane_u64((uint64x2_t)(result), 0);
 #endif
 }
+#else
+
+ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64_t k3) {
+    ahasher_t result;
+    result.buffer = k0;
+    result.pad = k1;
+#ifndef __ARM_NEON
+    result.extra_keys = _mm_set_epi64x(k3, k2);
+#else
+    uint64_t temp[2] = {k2, k3};
+    result.extra_keys = LOAD128(temp);
+#endif
+    return result;
+}
+
+static FAST_PATH ahasher_t update(ahasher_t hasher, int64_t data) {
+    hasher.buffer = folded_multiply(data ^ hasher.buffer, MULTIPLIER);
+    return hasher;
+}
+
+
+static FAST_PATH ahasher_t update2(ahasher_t hasher, uint64_t data1, uint64_t data2) {
+    uint64_t combined = folded_multiply(data1 ^ hasher.extra_keys[0],
+                                        data2 ^ hasher.extra_keys[1]);
+    hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, ROT);
+    return hasher;
+}
+
+#ifdef TARGET_HAS_128BIT
+static FAST_PATH ahasher_t update_128bit(ahasher_t hasher, vec128_t data) {
+    vec128_t xor_res = XOR128(data, hasher.extra_keys);
+    uint64_t *ptr = (uint64_t *)&xor_res;
+    uint64_t combined = folded_multiply(ptr[0], ptr[1]);
+    hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, ROT);
+    return hasher;
+}
+#endif
+
+#define WRITABLE(TYPE)                                                         \
+  ahasher_t write_##TYPE(ahasher_t hasher, TYPE value) {                       \
+    return update(hasher, (uint64_t)value);                            \
+  }
+
+WRITABLE(uint8_t)
+WRITABLE(int8_t)
+WRITABLE(uint16_t)
+WRITABLE(int16_t)
+WRITABLE(uint32_t)
+WRITABLE(int32_t)
+WRITABLE(int64_t)
+WRITABLE(uint64_t)
+
+ahasher_t hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size) {
+    hasher.buffer = (hasher.buffer + size) * MULTIPLIER;
+    if ( size > 8 ) {
+        if (size > 16) {
+#ifdef TARGET_HAS_128BIT
+            vec128_t temp = LOAD128(((uint8_t *) input + size - 1 * sizeof(vec128_t)));
+            hasher = update_128bit(hasher, temp);
+            while (size > 16) {
+                temp = LOAD128((uint8_t *) input);
+                hasher = update_128bit(hasher, temp);
+                size -= 16;
+                input = (uint8_t *) input + 16;
+            }
+#else
+            uint64_t temp[2];
+            memcpy(temp, ((uint8_t *) input + size - 16), 16);
+            hasher = update2(hasher, temp[0], temp[1]);
+            while ( size > 16 ) {
+                temp = memcpy(temp, input, 16);
+                hasher = update2(hasher, temp[0], temp[1]);
+                size -= 16;
+                input = (uint8_t *)input + 16;
+            }
+#endif
+            return hasher;
+        } else {
+            uint64_t temp[2] = {0, 0};
+            memcpy(temp, input, 8);
+            memcpy(temp + 1, input + size - 8, 8);
+            return update2(hasher, temp[0], temp[1]);
+        }
+    } else {
+        if ( size >= 2 ) {
+            if ( size >= 4 ) {
+                uint64_t temp[2] = {0, 0};
+                memcpy(temp, input, 4);
+                memcpy(temp + 1, input + size - 4, 4);
+                return update2(hasher, temp[0], temp[1]);
+            } else {
+                uint64_t temp[2] = {0, 0};
+                memcpy(temp, input, 2);
+                memcpy(temp + 1, input + size - 1, 1);
+                return update2(hasher, temp[0], temp[1]);
+            }
+        } else {
+            if ( size > 0 ) {
+                return update(hasher, *(uint8_t *)(input));
+            }
+        }
+    }
+    return hasher;
+}
+
+uint64_t finish(ahasher_t hasher) {
+    size_t rot = hasher.buffer & 63;
+    return rotate_left(folded_multiply(hasher.buffer, hasher.pad), rot);
+}
+#endif
 
 uint64_t ahash64(const void *buf, size_t size, uint64_t seed) {
     uint64_t keys[4] = {
@@ -324,5 +434,4 @@ uint64_t ahash64(const void *buf, size_t size, uint64_t seed) {
     return finish(ahasher);
 }
 
-#else
-#endif
+
