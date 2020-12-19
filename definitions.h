@@ -209,13 +209,6 @@ static FAST_PATH uint64_t folded_multiply(uint64_t s, uint64_t by) {
   // this should pass for most 64 bit machines
   __int128 result = (__int128)(s) * (__int128)(by);
   return (uint64_t)(result & 0xffffffffffffffff) ^ (uint64_t)(result >> 64);
-#elif defined(__clang__)
-  // with clang, we can still use TI integers in 32bit mode
-  // it has been tested that clang can gen a shorter code here than the next
-  // fallback
-  typedef unsigned int mul_t __attribute__((mode(TI)));
-  mul_t result = (mul_t)(s) * (mul_t)(by);
-  return (uint64_t)(result & 0xffffffffffffffff) ^ (uint64_t)(result >> 64);
 #elif defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64)
   uint64_t high, low;
   low = _umul128(s, by, &high);
