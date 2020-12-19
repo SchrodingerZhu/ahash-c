@@ -1,7 +1,7 @@
 #include "ahash.h"
 #include "random_state.h"
 #include <stddef.h>
-#ifndef USE_FALLBACK
+#ifndef AHASH_USE_FALLBACK
 
 ahasher_t new_with_key(aes128_t key1, aes128_t key2) {
   ahasher_t result;
@@ -13,7 +13,7 @@ ahasher_t new_with_key(aes128_t key1, aes128_t key2) {
 
 ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64_t k3) {
   aes128_t key1, key2;
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
   key1 = _mm_set_epi64x(k1, k0);
   key2 = _mm_set_epi64x(k3, k2);
 #else
@@ -24,8 +24,8 @@ ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64
   return new_with_key(key1, key2);
 }
 
-static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
+#ifdef AHASH_x86_TARGET
   aes128_t temp = _mm_set_epi64x(0, b);
   return _mm_add_epi64(a, temp);
 #else
@@ -35,8 +35,8 @@ static FAST_PATH aes128_t add_low(aes128_t a, uint64_t b) {
 #endif
 }
 
-static FAST_PATH aes128_t add_high(aes128_t a, uint64_t b) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t add_high(aes128_t a, uint64_t b) {
+#ifdef AHASH_x86_TARGET
   aes128_t temp = _mm_set_epi64x(b, 0);
   return _mm_add_epi64(a, temp);
 #else
@@ -66,7 +66,7 @@ ahasher_t hash2(ahasher_t hasher, aes128_t v1, aes128_t v2) {
 }
 
 ahasher_t write_uint64_t(ahasher_t hasher, uint64_t value) {
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
   aes128_t temp = _mm_set_epi64x(value, 0);
   return hash1(hasher, temp);
 #else
@@ -109,7 +109,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         data[1] = data[0] = 0;
       }
     }
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
     aes128_t temp = _mm_set_epi64x(data[1], data[0]);
 #else
     aes128_t temp = (aes128_t)vld1q_u64(data);
@@ -118,11 +118,11 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
   } else {
     if (size > 32) {
       if (size > 64) {
-#if !(defined(__VAES__) && defined(x86_TARGET))
+#if !(defined(__VAES__) && defined(AHASH_x86_TARGET))
         aes128_t tail[4];
         aes128_t current[4];
         aes128_t sum[2];
-#if defined(x86_TARGET)
+#if defined(AHASH_x86_TARGET)
         tail[0] = /// TODO: whether _mm_lddqu_si128 is good enough here for unaligned access
             _mm_lddqu_si128((aes128_t *)(input + size - 4 * sizeof(aes128_t)));
         tail[1] =
@@ -150,7 +150,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         sum[0] = shuffle_add(sum[0], tail[2]);
         sum[1] = shuffle_add(sum[1], tail[3]);
         while (size > 64) {
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
           tail[0] = _mm_lddqu_si128((aes128_t *)(input + 0 * sizeof(aes128_t)));
           tail[1] = _mm_lddqu_si128((aes128_t *)(input + 1 * sizeof(aes128_t)));
           tail[2] = _mm_lddqu_si128((aes128_t *)(input + 2 * sizeof(aes128_t)));
@@ -181,7 +181,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         return hash1(hasher, add_by_64s(sum[0], sum[1]));
       } else {
         aes128_t head[2], tail[2];
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
         head[0] = _mm_lddqu_si128((aes128_t *)(input + 0 * sizeof(aes128_t)));
         head[1] = _mm_lddqu_si128((aes128_t *)(input + 1 * sizeof(aes128_t)));
         tail[0] =
@@ -275,7 +275,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
     } else {
       if (size > 16) {
         aes128_t a, b;
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
         a = _mm_lddqu_si128((aes128_t *)(input + 0 * sizeof(aes128_t)));
         b = _mm_lddqu_si128((aes128_t *)(input + size - 1 * sizeof(aes128_t)));
 
@@ -289,7 +289,7 @@ ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t si
         uint64_t data[2];
         data[0] = *(uint64_t *)input;
         data[1] = *(uint64_t *)((uint8_t *)input + size - sizeof(uint64_t));
-#ifdef x86_TARGET
+#ifdef AHASH_x86_TARGET
         aes128_t temp = _mm_set_epi64x(data[1], data[0]);
 #else
         aes128_t temp = (aes128_t)vld1q_u64(data);
@@ -322,16 +322,16 @@ ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64
     return result;
 }
 
-static FAST_PATH ahasher_t update(ahasher_t hasher, int64_t data) {
-    hasher.buffer = folded_multiply(data ^ hasher.buffer, MULTIPLIER);
+static AHASH_FAST_PATH ahasher_t update(ahasher_t hasher, int64_t data) {
+    hasher.buffer = folded_multiply(data ^ hasher.buffer, AHASH_MULTIPLIER);
     return hasher;
 }
 
 
-static FAST_PATH ahasher_t update2(ahasher_t hasher, uint64_t data1, uint64_t data2) {
+static AHASH_FAST_PATH ahasher_t update2(ahasher_t hasher, uint64_t data1, uint64_t data2) {
     uint64_t combined = folded_multiply(data1 ^ hasher.extra_keys[0],
                                         data2 ^ hasher.extra_keys[1]);
-    hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, ROT);
+    hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, AHASH_ROT);
     return hasher;
 }
 
@@ -350,7 +350,7 @@ WRITABLE(int64_t)
 WRITABLE(uint64_t)
 
 ahasher_t hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size) {
-    hasher.buffer = (hasher.buffer + size) * MULTIPLIER;
+    hasher.buffer = (hasher.buffer + size) * AHASH_MULTIPLIER;
     if ( size > 8 ) {
         if (size > 16) {
             uint64_t temp[2];

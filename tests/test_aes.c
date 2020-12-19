@@ -14,7 +14,7 @@
 } while (0);
 
 void shuffle_no_collide_with_aes() {
-#ifndef USE_FALLBACK
+#ifndef AHASH_USE_FALLBACK
     uint8_t value[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     aes128_t zero_mask_encode = aes_encode((aes128_t){}, (aes128_t){});
     aes128_t zero_mask_decode = aes_decode((aes128_t){}, (aes128_t){});

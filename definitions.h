@@ -13,15 +13,15 @@
 #endif
 
 #if defined(__clang__) || defined(__GNUC__)
-#define FAST_PATH inline __attribute__((always_inline))
+#define AHASH_FAST_PATH inline __attribute__((always_inline))
 #elif defined(_MSC_VER)
 #include <intrin.h>
-#define FAST_PATH inline __forceinline
+#define AHASH_FAST_PATH inline __forceinline
 #else
-#define FAST_PATH inline
+#define AHASH_FAST_PATH inline
 #endif
 #if defined(__SSSE3__) &&  defined(__AES__)
-#define x86_TARGET
+#define AHASH_x86_TARGET
 #include <immintrin.h>
 #include <wmmintrin.h>
 #ifdef __VAES__
@@ -34,7 +34,7 @@ typedef __m128i aes128_t;
 #define AES_OR(a, b) (_mm_or_si128(a, b))
 #elif (defined(__arm64__) || defined(__aarch64__) ||  defined(_M_ARM64)) &&       \
     defined(__ARM_NEON) && defined(__ARM_FEATURE_CRYPTO)
-#define ARM_TARGET
+#define AHASH_ARM_TARGET
 #ifdef _MSC_VER
 #include <arm64_neon.h>
 #else
@@ -43,31 +43,31 @@ typedef __m128i aes128_t;
 typedef uint8x16_t aes128_t;
 #define AES_OR(a, b) (veorq_u8(a, b))
 #else
-#define USE_FALLBACK
+#define AHASH_USE_FALLBACK
 #endif
 
 
-#ifndef USE_FALLBACK
+#ifndef AHASH_USE_FALLBACK
 
-#if defined(__VAES__) && defined(x86_TARGET)
-static FAST_PATH aes256_t shuffle2(aes256_t data) {
+#if defined(__VAES__) && defined(AHASH_x86_TARGET)
+static AHASH_FAST_PATH aes256_t shuffle2(aes256_t data) {
     const aes256_t mask =
             _mm256_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull,
                               0x020a07000c01030eull, 0x050f0d0806090b04ull);
     return _mm256_shuffle_epi8(data, mask);
 }
-static FAST_PATH aes256_t shuffle_add2(aes256_t x, aes256_t y) {
+static AHASH_FAST_PATH aes256_t shuffle_add2(aes256_t x, aes256_t y) {
     return _mm256_add_epi64(shuffle2(x), y);
 }
-static FAST_PATH aes256_t add_by_64s2(aes256_t x, aes256_t y) {
+static AHASH_FAST_PATH aes256_t add_by_64s2(aes256_t x, aes256_t y) {
     return _mm256_add_epi64(x, y);
 }
-static FAST_PATH aes256_t aes_encode2(aes256_t x, aes256_t y) {
+static AHASH_FAST_PATH aes256_t aes_encode2(aes256_t x, aes256_t y) {
     return _mm256_aesenc_epi128(x, y);
 }
 
 #ifdef __AVX512DQ__
-static FAST_PATH aes512_t shuffle4(aes512_t data) {
+static AHASH_FAST_PATH aes512_t shuffle4(aes512_t data) {
     const aes512_t mask =
             _mm512_set_epi64(0x020a07000c01030eull, 0x050f0d0806090b04ull,
                               0x020a07000c01030eull, 0x050f0d0806090b04ull,
@@ -75,27 +75,27 @@ static FAST_PATH aes512_t shuffle4(aes512_t data) {
                              0x020a07000c01030eull, 0x050f0d0806090b04ull);
     return _mm512_shuffle_epi8(data, mask);
 }
-static FAST_PATH aes512_t shuffle_add4(aes512_t x, aes512_t y) {
+static AHASH_FAST_PATH aes512_t shuffle_add4(aes512_t x, aes512_t y) {
     return _mm512_add_epi64(shuffle4(x), y);
 }
-static FAST_PATH aes512_t add_by_64s4(aes512_t x, aes512_t y) {
+static AHASH_FAST_PATH aes512_t add_by_64s4(aes512_t x, aes512_t y) {
     return _mm512_add_epi64(x, y);
 }
-static FAST_PATH aes512_t aes_encode4(aes512_t x, aes512_t y) {
+static AHASH_FAST_PATH aes512_t aes_encode4(aes512_t x, aes512_t y) {
     return _mm512_aesenc_epi128(x, y);
 }
 #endif
 #endif
 
-static FAST_PATH aes128_t shuffle(aes128_t data) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t shuffle(aes128_t data) {
+#ifdef AHASH_x86_TARGET
   const aes128_t mask =
       _mm_set_epi64x(0x020a07000c01030eull, 0x050f0d0806090b04ull);
   return _mm_shuffle_epi8(data, mask);
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
   static const unsigned long masks[2] = {0x020a07000c01030eull, 0x050f0d0806090b04ull};
   return vqtbl1q_p8(data, vld1q_u64(masks));
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return (aes128_t)vqtbl1q_p8(
       (poly8x16_t)data,
       (aes128_t)(((__int128)(0x020a07000c01030eull) << 64ull) |
@@ -108,12 +108,12 @@ static FAST_PATH aes128_t shuffle(aes128_t data) {
 #endif
 }
 
-static FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
+#ifdef AHASH_x86_TARGET
   return _mm_add_epi64(shuffle(x), y);
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
     return vaddq_s64(shuffle(x), y);
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return (aes128_t)vaddq_s64((int64x2_t)shuffle(x), (int64x2_t)y);
 #elif
   typedef uint64_t v64i __attribute__((vector_size(16)));
@@ -121,12 +121,12 @@ static FAST_PATH aes128_t shuffle_add(aes128_t x, aes128_t y) {
 #endif
 }
 
-static FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
+#ifdef AHASH_x86_TARGET
     return _mm_add_epi64(x, y);
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
     return vaddq_s64(x, y);
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return (aes128_t)vaddq_s64((int64x2_t)x, (int64x2_t)y);
 #elif
   typedef int64_t v64i __attribute__((vector_size(16)));
@@ -134,12 +134,12 @@ static FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y) {
 #endif
 }
 
-static FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
+#ifdef AHASH_x86_TARGET
   return shuffle(_mm_add_epi64(x, y));
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
     return shuffle(vaddq_s64(x, y));
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return shuffle((aes128_t)vaddq_s64((int64x2_t)(x), (int64x2_t)y));
 #elif
   typedef int64_t v64i __attribute__((vector_size(16)));
@@ -147,34 +147,34 @@ static FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y) {
 #endif
 }
 
-static FAST_PATH aes128_t aes_encode(aes128_t x, aes128_t y) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t aes_encode(aes128_t x, aes128_t y) {
+#ifdef AHASH_x86_TARGET
   return _mm_aesenc_si128(x, y);
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
   static const unsigned long zero[2] = {0, 0};
   return veorq_u8(vaesmcq_u8(vaeseq_u8(x, vld1q_u64(zero))), y);
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return (aes128_t)vaesmcq_u8(vaeseq_u8((uint8x16_t)x, (uint8x16_t){})) ^ y;
 #endif
 }
 
-static FAST_PATH aes128_t aes_decode(aes128_t x, aes128_t y) {
-#ifdef x86_TARGET
+static AHASH_FAST_PATH aes128_t aes_decode(aes128_t x, aes128_t y) {
+#ifdef AHASH_x86_TARGET
   return _mm_aesdec_si128(x, y);
-#elif defined(ARM_TARGET) && defined(_MSC_VER)
+#elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
   static const unsigned long zero[2] = {0, 0};
   return veorq_u8(vaesimcq_u8(vaesdq_u8(x, vld1q_u64(zero))), y);
-#elif defined(ARM_TARGET)
+#elif defined(AHASH_ARM_TARGET)
   return (aes128_t)vaesimcq_u8(vaesdq_u8((uint8x16_t)x, (uint8x16_t){})) ^ y;
 #endif
 }
 #else
-static FAST_PATH uint64_t rotate_left(uint64_t x, uint64_t bit) {
-#if __has_builtin(__builtin_rotateleft64)
+static AHASH_FAST_PATH uint64_t rotate_left(uint64_t x, uint64_t bit) {
+#if __has_builtin(__builtin_AHASH_ROTateleft64)
   // this is bascially a clang builtin
-  return __builtin_rotateleft64(x, bit);
+  return __builtin_AHASH_ROTateleft64(x, bit);
 #elif defined(_MSC_VER)
-  return _rotl64(x, bit);
+  return _AHASH_ROTl64(x, bit);
 #else
   // actually, both arm64 and x86_64 has good codegen
   // with the following on clang and gcc
@@ -182,7 +182,7 @@ static FAST_PATH uint64_t rotate_left(uint64_t x, uint64_t bit) {
 #endif
 }
 
-static FAST_PATH void emu_multiply(uint64_t op1, uint64_t op2, uint64_t *hi,
+static AHASH_FAST_PATH void emu_multiply(uint64_t op1, uint64_t op2, uint64_t *hi,
                                    uint64_t *lo) {
   uint64_t u1 = (op1 & 0xffffffff);
   uint64_t v1 = (op2 & 0xffffffff);
@@ -203,7 +203,7 @@ static FAST_PATH void emu_multiply(uint64_t op1, uint64_t op2, uint64_t *hi,
   *lo = (t << 32) + w3;
 }
 
-static FAST_PATH uint64_t folded_multiply(uint64_t s, uint64_t by) {
+static AHASH_FAST_PATH uint64_t folded_multiply(uint64_t s, uint64_t by) {
 #if defined(__SIZEOF_INT128__)
   // if int128 is available, then use int128,
   // this should pass for most 64 bit machines

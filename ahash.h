@@ -2,7 +2,7 @@
 #define AHASH_AHASH_H
 #include "definitions.h"
 
-#ifndef USE_FALLBACK
+#ifndef AHASH_USE_FALLBACK
 typedef struct ahasher_s {
     aes128_t enc;
     aes128_t sum;
@@ -10,16 +10,12 @@ typedef struct ahasher_s {
 } ahasher_t;
 #else
 #include <string.h>
-#define MULTIPLIER 6364136223846793005ull
-#define ROT        23
+#define AHASH_MULTIPLIER 6364136223846793005ull
+#define AHASH_ROT        23
 typedef struct ahasher_s {
     uint64_t buffer;
     uint64_t pad;
-#ifdef TARGET_HAS_128BIT
-    vec128_t extra_keys;
-#else
     uint64_t extra_keys[2];
-#endif
 } ahasher_t;
 #endif
 
