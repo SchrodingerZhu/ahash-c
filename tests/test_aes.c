@@ -12,7 +12,7 @@
 #define ASSERT(x) \
   do \
   { \
-    if (!x) \
+    if (!(x)) \
     { \
       fflush(stdout); \
       abort(); \
@@ -42,8 +42,8 @@ void shuffle_no_collide_with_aes()
       printf("dec[%d]=%d\n", j, decode_vec[j]);
       if (shuffled_vec[j] != 0)
       {
-        assert(encode_vec[j] == 0);
-        assert(decode_vec[j] == 0);
+        ASSERT(encode_vec[j] == 0);
+        ASSERT(decode_vec[j] == 0);
       }
     }
     printf("\n");
@@ -57,7 +57,7 @@ void unique()
   random_state_t a = new_state(), b = new_state();
   uint64_t ra = finish(CREATE_HASHER(a)), rb = finish(CREATE_HASHER(b));
   printf("unique test: ra=%lu, rb=%lu\n", ra, rb);
-  assert(ra != rb);
+  ASSERT(ra != rb);
 }
 
 void same()
@@ -69,7 +69,7 @@ void same()
   y = write_uint64_t(y, address);
   uint64_t rx = finish(x), ry = finish(y);
   printf("same test: rx=%lu, ry=%lu\n", rx, ry);
-  assert(rx == ry);
+  ASSERT(rx == ry);
 }
 
 char* generate_random_strings(size_t count, size_t length)
@@ -111,12 +111,12 @@ void random_equal()
   printf("testing byte using write\n");
   for (uint8_t i = 0; i < 255; ++i)
   {
-    assert(ahash64(&i, sizeof(uint8_t), i) == ahash64(&i, sizeof(uint8_t), i));
+    ASSERT(ahash64(&i, sizeof(uint8_t), i) == ahash64(&i, sizeof(uint8_t), i));
   }
   printf("testing int using write\n");
   for (int i = 0; i < 65536; ++i)
   {
-    assert(ahash64(&i, sizeof(int), i) == ahash64(&i, sizeof(int), i));
+    ASSERT(ahash64(&i, sizeof(int), i) == ahash64(&i, sizeof(int), i));
   }
   printf("testing different states\n");
   for (int i = 0; i < 65536; ++i)
@@ -124,7 +124,7 @@ void random_equal()
     random_state_t state = new_state();
     ahasher_t hasher1 = CREATE_HASHER(state);
     ahasher_t hasher2 = CREATE_HASHER(state);
-    assert(
+    ASSERT(
       finish(write_uint64_t(hasher1, i)) == finish(write_uint64_t(hasher2, i)));
   }
   printf("testing strings\n");
@@ -132,7 +132,7 @@ void random_equal()
   {
     uint64_t seed = i ^ (ptrdiff_t)&random_equal;
     char* data = generate_random_strings(1, 5261);
-    assert(ahash64(data, 5261, seed) == ahash64(data, 5261, seed));
+    ASSERT(ahash64(data, 5261, seed) == ahash64(data, 5261, seed));
     free(data);
   }
 }
