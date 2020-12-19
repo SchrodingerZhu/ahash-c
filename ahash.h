@@ -10,24 +10,6 @@ typedef struct ahasher_s {
 } ahasher_t;
 #else
 #include <string.h>
-#if defined(__SSE2__)
-#define TARGET_HAS_128BIT
-#define LOAD128(x) (_mm_loadu_si128((vec128_t *)(x)))
-#define XOR128(x, y) (_mm_xor_si128((x), (y)))
-#include <emmintrin.h>
-typedef __m128i vec128_t;
-#elif defined(__ARM_NEON)
-#if !defined(_MSC_VER) || !defined(_M_ARM64)
-#include <arm_neon.h>
-#else
-#include <arm64_neon.h>
-#endif
-#define TARGET_HAS_128BIT
-#define LOAD128(x) ((vec128_t)vld1q_u64((uint64_t *)(x)))
-#define XOR128(x, y) ((vec128_t)veorq_u64((x), (y)))
-typedef uint64x2_t vec128_t;
-#endif
-
 #define MULTIPLIER 6364136223846793005ull
 #define ROT        23
 typedef struct ahasher_s {

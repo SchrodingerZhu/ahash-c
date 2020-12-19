@@ -317,17 +317,8 @@ ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64
     ahasher_t result;
     result.buffer = k0;
     result.pad = k1;
-#ifdef TARGET_HAS_128BIT
-#if defined(__x86_64__) || defined(__i386__) || defined(_WIN64) || defined(_WIN32)
-    result.extra_keys = _mm_set_epi64x(k3, k2);
-#else
-    uint64_t temp[2] = {k2, k3};
-    result.extra_keys = LOAD128(temp);
-#endif
-#else
     result.extra_keys[0] = k2;
     result.extra_keys[1] = k3;
-#endif
     return result;
 }
 
@@ -343,16 +334,6 @@ static FAST_PATH ahasher_t update2(ahasher_t hasher, uint64_t data1, uint64_t da
     hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, ROT);
     return hasher;
 }
-
-#ifdef TARGET_HAS_128BIT
-static FAST_PATH ahasher_t update_128bit(ahasher_t hasher, vec128_t data) {
-    vec128_t xor_res = XOR128(data, hasher.extra_keys);
-    uint64_t *ptr = (uint64_t *)&xor_res;
-    uint64_t combined = folded_multiply(ptr[0], ptr[1]);
-    hasher.buffer = rotate_left((combined + hasher.buffer) ^ hasher.pad, ROT);
-    return hasher;
-}
-#endif
 
 #define WRITABLE(TYPE)                                                         \
   ahasher_t write_##TYPE(ahasher_t hasher, TYPE value) {                       \
@@ -372,16 +353,6 @@ ahasher_t hash_write(ahasher_t hasher, const void* __restrict__ input, size_t si
     hasher.buffer = (hasher.buffer + size) * MULTIPLIER;
     if ( size > 8 ) {
         if (size > 16) {
-#ifdef TARGET_HAS_128BIT
-            vec128_t temp = LOAD128(((uint8_t *) input + size - 1 * sizeof(vec128_t)));
-            hasher = update_128bit(hasher, temp);
-            while (size > 16) {
-                temp = LOAD128((uint8_t *) input);
-                hasher = update_128bit(hasher, temp);
-                size -= 16;
-                input = (uint8_t *) input + 16;
-            }
-#else
             uint64_t temp[2];
             memcpy(temp, ((uint8_t *) input + size - 16), 16);
             hasher = update2(hasher, temp[0], temp[1]);
@@ -391,7 +362,6 @@ ahasher_t hash_write(ahasher_t hasher, const void* __restrict__ input, size_t si
                 size -= 16;
                 input = (uint8_t *)input + 16;
             }
-#endif
             return hasher;
         } else {
             uint64_t temp[2] = {0, 0};
@@ -483,13 +453,6 @@ const char * ahash_version( void ) {
 #else
 #define AVX2_EXTENSION ""
 #endif
-
-#if defined(__SSE2__) && defined(USE_FALLBACK)
-#define SSE2_EXTENSION "+sse2"
-#else
-#define SSE2_EXTENSION ""
-#endif
-
-    return ARCH AES_EXTENSION SSE2_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION AVX512_EXTENSION;
+    return ARCH AES_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION AVX512_EXTENSION;
 }
 
