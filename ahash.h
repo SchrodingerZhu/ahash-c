@@ -60,5 +60,5 @@ ahasher_t add_length(ahasher_t hasher, size_t length);
 ahasher_t hash_write(ahasher_t hasher, const void *__restrict__ input, size_t size);
 uint64_t finish(ahasher_t hasher);
 uint64_t ahash64(const void* __restrict__ buf, size_t size, uint64_t seed);
-
+const char * ahash_version( void );
 #endif //AHASH_AHASH_H

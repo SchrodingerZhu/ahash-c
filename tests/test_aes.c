@@ -53,7 +53,7 @@ void unique() {
 void same() {
     random_state_t a = new_state();
     ahasher_t x = CREATE_HASHER(a), y = CREATE_HASHER(a);
-    uint64_t address = (uint64_t)same;
+    uint64_t address = (ptrdiff_t)same;
     x = write_uint64_t(x, address);
     y = write_uint64_t(y, address);
     uint64_t rx = finish(x),
@@ -109,7 +109,7 @@ void random_equal() {
     }
     printf("testing strings\n");
     for(uint64_t i = 0; i < 233; ++i) {
-        uint64_t seed = i ^ (uint64_t)&random_equal;
+        uint64_t seed = i ^ (ptrdiff_t)&random_equal;
         char* data = generate_random_strings(1, 5261);
         assert(ahash64(data, 5261, seed) == ahash64(data, 5261, seed));
         free(data);
@@ -117,6 +117,7 @@ void random_equal() {
 }
 
 int main() {
+    printf("%s\n", ahash_version());
     shuffle_no_collide_with_aes();
     unique();
     same();

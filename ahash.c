@@ -317,11 +317,16 @@ ahasher_t hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64
     ahasher_t result;
     result.buffer = k0;
     result.pad = k1;
-#ifndef __ARM_NEON
+#ifdef TARGET_HAS_128BIT
+#if defined(__x86_64__) || defined(__i386__) || defined(_WIN64) || defined(_WIN32)
     result.extra_keys = _mm_set_epi64x(k3, k2);
 #else
     uint64_t temp[2] = {k2, k3};
     result.extra_keys = LOAD128(temp);
+#endif
+#else
+    result.extra_keys[0] = k2;
+    result.extra_keys[1] = k3;
 #endif
     return result;
 }
@@ -381,7 +386,7 @@ ahasher_t hash_write(ahasher_t hasher, const void* __restrict__ input, size_t si
             memcpy(temp, ((uint8_t *) input + size - 16), 16);
             hasher = update2(hasher, temp[0], temp[1]);
             while ( size > 16 ) {
-                temp = memcpy(temp, input, 16);
+                memcpy(temp, input, 16);
                 hasher = update2(hasher, temp[0], temp[1]);
                 size -= 16;
                 input = (uint8_t *)input + 16;
@@ -434,4 +439,57 @@ uint64_t ahash64(const void *buf, size_t size, uint64_t seed) {
     return finish(ahasher);
 }
 
+const char * ahash_version( void ) {
+#if defined(__x86_64__) || defined(_WIN64)
+#define ARCH "x86_64"
+#elif defined(__i386__) || defined(_WIN32)
+#define ARCH "x86"
+#elif defined(__arm64__) || defined(__aarch64__) ||  defined(_M_ARM64)
+#define ARCH "arm64"
+#elif defined(__arm__) || defined(_M_ARM)
+#define ARCH "arm"
+#else
+#define ARCH "generic"
+#endif
+
+#if defined(__SSSE3__) && defined(__AES__)
+#define AES_EXTENSION "+ssse3+aes"
+#elif defined(__ARM_FEATURE_CRYPTO)
+#define AES_EXTENSION "+crypto"
+#else
+#define AES_EXTENSION ""
+#endif
+
+#if defined(__ARM_NEON)
+#define NEON_EXTENSION "+neon"
+#else
+#define NEON_EXTENSION ""
+#endif
+
+#if defined(__VAES__)
+#define VAES_EXTENSION "+vaes"
+#else
+#define VAES_EXTENSION ""
+#endif
+
+#if defined(__AVX512DQ__) && defined(__VAES__)
+#define AVX512_EXTENSION "+avx512"
+#else
+#define AVX512_EXTENSION ""
+#endif
+
+#if defined(__AVX2__) && defined(__VAES__)
+#define AVX2_EXTENSION "+avx2"
+#else
+#define AVX2_EXTENSION ""
+#endif
+
+#if defined(__SSE2__) && defined(USE_FALLBACK)
+#define SSE2_EXTENSION "+sse2"
+#else
+#define SSE2_EXTENSION ""
+#endif
+
+    return ARCH AES_EXTENSION SSE2_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION AVX512_EXTENSION;
+}
 
