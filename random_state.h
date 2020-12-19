@@ -13,8 +13,6 @@ typedef struct random_state_s
   uint64_t keys[4];
 } random_state_t;
 
-extern atomic_size_t COUNTER;
-
 random_state_t new_state();
 void reinitialize_global_seed(uint64_t a, uint64_t b, uint64_t c, uint64_t d);
 

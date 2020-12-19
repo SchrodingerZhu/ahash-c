@@ -10,10 +10,9 @@
 #include <string.h>
 #include <time.h>
 
-atomic_size_t COUNTER = 0;
-
 random_state_t new_state_from_keys(uint64_t* a, uint64_t* b)
 {
+  static atomic_size_t COUNTER = 0;
   ahasher_t hasher = hasher_from_random_state(a[0], a[1], a[2], a[3]);
   uint64_t stack_position = (ptrdiff_t)(&new_state_from_keys);
 #if defined(__arm__) || defined(__arm64__) || defined(__aarch64__) || \
