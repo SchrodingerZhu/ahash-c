@@ -147,19 +147,19 @@ static AHASH_FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y)
 #  endif
 }
 
-static AHASH_FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y)
-{
-#  ifdef AHASH_x86_TARGET
-  return shuffle(_mm_add_epi64(x, y));
-#  elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
-  return shuffle(vaddq_s64(x, y));
-#  elif defined(AHASH_ARM_TARGET)
-  return shuffle((aes128_t)vaddq_s64((int64x2_t)(x), (int64x2_t)y));
-#  elif
-  typedef int64_t v64i __attribute__((vector_size(16)));
-  return shuffle((aes128_t)((v64i)x + (v64i)y));
-#  endif
-}
+//static AHASH_FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y)
+//{
+//#  ifdef AHASH_x86_TARGET
+//  return shuffle(_mm_add_epi64(x, y));
+//#  elif defined(AHASH_ARM_TARGET) && defined(_MSC_VER)
+//  return shuffle(vaddq_s64(x, y));
+//#  elif defined(AHASH_ARM_TARGET)
+//  return shuffle((aes128_t)vaddq_s64((int64x2_t)(x), (int64x2_t)y));
+//#  elif
+//  typedef int64_t v64i __attribute__((vector_size(16)));
+//  return shuffle((aes128_t)((v64i)x + (v64i)y));
+//#  endif
+//}
 
 static AHASH_FAST_PATH aes128_t aes_encode(aes128_t x, aes128_t y)
 {
@@ -332,6 +332,19 @@ random_state_t new_state()
   return new_state_from_keys(PI, PI2);
 }
 
+random_state_t new_state_from_seed(int32_t y)
+// FIXME: current koka only has good int32 support
+{
+    uint64_t x = y;
+    uint64_t seed = x * x + (~x << 32u);
+    random_state_t res;
+    res.keys[0] = PI[0] ^ seed,
+    res.keys[1] = PI[1] + seed;
+    res.keys[2] = PI[2];
+    res.keys[3] = PI[3];
+    return res;
+}
+
 
 #ifndef AHASH_USE_FALLBACK
 
@@ -371,17 +384,17 @@ static AHASH_FAST_PATH aes128_t add_low(aes128_t a, uint64_t b)
 #  endif
 }
 
-static AHASH_FAST_PATH aes128_t add_high(aes128_t a, uint64_t b)
-{
-#  ifdef AHASH_x86_TARGET
-  aes128_t temp = _mm_set_epi64x(b, 0);
-  return _mm_add_epi64(a, temp);
-#  else
-  uint64_t temp[2] = {0, b};
-  uint64x2_t operand = vld1q_u64(temp);
-  return (aes128_t)vaddq_u64((uint64x2_t)a, operand);
-#  endif
-}
+//static AHASH_FAST_PATH aes128_t add_high(aes128_t a, uint64_t b)
+//{
+//#  ifdef AHASH_x86_TARGET
+//  aes128_t temp = _mm_set_epi64x(b, 0);
+//  return _mm_add_epi64(a, temp);
+//#  else
+//  uint64_t temp[2] = {0, b};
+//  uint64x2_t operand = vld1q_u64(temp);
+//  return (aes128_t)vaddq_u64((uint64x2_t)a, operand);
+//#  endif
+//}
 
 ahasher_t add_length(ahasher_t hasher, size_t length)
 {
@@ -870,14 +883,6 @@ typedef struct random_state_wrapper {
     random_state_t _inner;
 } random_state_wrapper_t;
 
-static AHASH_FAST_PATH ahasher_t* get_hasher(void* _x){
-    return &((ahasher_wrapper_t*)_x)->_inner;
-}
-
-static AHASH_FAST_PATH random_state_t* get_random_state(void* _x){
-    return &((random_state_wrapper_t*)_x)->_inner;
-}
-
 static kk_string_t kk_ahash_version( void ) {
     return AHASH_VERSION;
 }
@@ -894,6 +899,12 @@ static kk_unit_t reinitialize_global_seed( kk_context_t* _ctx )
 static kk_ahash__random_state next_random_state( kk_context_t* _ctx ) {
     random_state_wrapper_t* state = kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
     state->_inner = new_state();
+    return kk_datatype_from_ptr(&state->_base._block);
+}
+
+static kk_ahash__random_state seed_state( int32_t seed, kk_context_t* _ctx ) {
+    random_state_wrapper_t* state = kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
+    state->_inner = new_state_from_seed(seed);
     return kk_datatype_from_ptr(&state->_base._block);
 }
 
@@ -994,3 +1005,24 @@ static kk_ahash__hasher kk_hasher_write_str( kk_ahash__hasher hasher, kk_string_
     }
 }
 
+#define TRIVIAL_TYPE_WRITE(TYPE) \
+static kk_ahash__hasher kk_hasher_write_##TYPE( kk_ahash__hasher hasher, TYPE data, kk_context_t* _ctx ) { \
+    ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;                                                   \
+    h = write_uint64_t(h, (uint64_t)(data));                             \
+    if (kk_ahash__hasher_is_unique(hasher)) { \
+        ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; \
+        return hasher; \
+    } else { \
+        kk_ahash__hasher_decref(hasher, _ctx); \
+        ahasher_wrapper_t* new_hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx); \
+        new_hasher->_inner = h; \
+        return kk_datatype_from_ptr(&new_hasher->_base._block); \
+    } \
+} \
+
+TRIVIAL_TYPE_WRITE(int32_t);
+TRIVIAL_TYPE_WRITE(int16_t);
+TRIVIAL_TYPE_WRITE(int8_t);
+TRIVIAL_TYPE_WRITE(uint8_t);
+TRIVIAL_TYPE_WRITE(size_t);
+TRIVIAL_TYPE_WRITE(kk_char_t);
