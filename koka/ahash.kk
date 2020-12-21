@@ -62,6 +62,34 @@ extern write(h: hasher, x: char) : hasher {
   c inline "kk_hasher_write_kk_char_t((#1), (#2), kk_context())"
 }
 
+fun write(h: hasher, x: list<int>) : hasher {
+  x.foldl(h, write)
+}
+
+fun write(h: hasher, x: list<string>) : hasher {
+  x.foldl(h, write)
+}
+
+fun write(h: hasher, x: list<int32>) : hasher {
+  x.foldl(h, write)
+}
+
+//fun write(h: hasher, x: list<int8>) : hasher {
+//  x.foldl(h, write)
+//}
+
+//fun write(h: hasher, x: list<uint8>) : hasher {
+//  x.foldl(h, write)
+//}
+
+//fun write(h: hasher, x: list<int16>) : hasher {
+//  x.foldl(h, write)
+//}
+
+fun write(h: hasher, x: list<char>) : hasher {
+  x.foldl(h, write)
+}
+
 fun single(state: random-state, x: int) : int {
   state.hasher.write(x).finish
 }
