@@ -6,7 +6,7 @@ type hasher
 type random-state
 
 
-extern ahash_version() : string {
+extern ahash-version() : string {
   c inline "kk_ahash_version()"
 }
 
