@@ -147,7 +147,7 @@ static AHASH_FAST_PATH aes128_t add_by_64s(aes128_t x, aes128_t y)
 #  endif
 }
 
-//static AHASH_FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y)
+// static AHASH_FAST_PATH aes128_t add_shuffle(aes128_t x, aes128_t y)
 //{
 //#  ifdef AHASH_x86_TARGET
 //  return shuffle(_mm_add_epi64(x, y));
@@ -303,6 +303,7 @@ random_state_t new_state_from_keys(uint64_t* a, uint64_t* b)
 #else
   uint64_t counter = (uint64_t)atomic_fetch_add_explicit(
     &COUNTER, stack_position, memory_order_relaxed);
+  counter += stack_position;
 #endif
   hasher = write_uint64_t(hasher, counter);
   random_state_t result;
@@ -335,16 +336,14 @@ random_state_t new_state()
 random_state_t new_state_from_seed(int32_t y)
 // FIXME: current koka only has good int32 support
 {
-    uint64_t x = y;
-    uint64_t seed = x * x + (~x << 32u);
-    random_state_t res;
-    res.keys[0] = PI[0] ^ seed,
-    res.keys[1] = PI[1] + seed;
-    res.keys[2] = PI[2];
-    res.keys[3] = PI[3];
-    return res;
+  uint64_t x = y;
+  uint64_t seed = x * x + (~x << 32u);
+  random_state_t res;
+  res.keys[0] = PI[0] ^ seed, res.keys[1] = PI[1] + seed;
+  res.keys[2] = PI[2];
+  res.keys[3] = PI[3];
+  return res;
 }
-
 
 #ifndef AHASH_USE_FALLBACK
 
@@ -384,7 +383,7 @@ static AHASH_FAST_PATH aes128_t add_low(aes128_t a, uint64_t b)
 #  endif
 }
 
-//static AHASH_FAST_PATH aes128_t add_high(aes128_t a, uint64_t b)
+// static AHASH_FAST_PATH aes128_t add_high(aes128_t a, uint64_t b)
 //{
 //#  ifdef AHASH_x86_TARGET
 //  aes128_t temp = _mm_set_epi64x(b, 0);
@@ -498,22 +497,23 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
 #    if defined(AHASH_x86_TARGET)
         tail[0] = /// TODO: whether _mm_lddqu_si128 is good enough here for
                   /// unaligned access
-          _mm_lddqu_si128((aes128_t*)((uint8_t *)input + size - 4 * sizeof(aes128_t)));
-        tail[1] =
-          _mm_lddqu_si128((aes128_t*)((uint8_t *)input + size - 3 * sizeof(aes128_t)));
-        tail[2] =
-          _mm_lddqu_si128((aes128_t*)((uint8_t *)input + size - 2 * sizeof(aes128_t)));
-        tail[3] =
-          _mm_lddqu_si128((aes128_t*)((uint8_t *)input + size - 1 * sizeof(aes128_t)));
+          _mm_lddqu_si128(
+            (aes128_t*)((uint8_t*)input + size - 4 * sizeof(aes128_t)));
+        tail[1] = _mm_lddqu_si128(
+          (aes128_t*)((uint8_t*)input + size - 3 * sizeof(aes128_t)));
+        tail[2] = _mm_lddqu_si128(
+          (aes128_t*)((uint8_t*)input + size - 2 * sizeof(aes128_t)));
+        tail[3] = _mm_lddqu_si128(
+          (aes128_t*)((uint8_t*)input + size - 1 * sizeof(aes128_t)));
 #    else
-        tail[0] =
-          (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + size - 4 * sizeof(aes128_t)));
-        tail[1] =
-          (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + size - 3 * sizeof(aes128_t)));
-        tail[2] =
-          (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + size - 2 * sizeof(aes128_t)));
-        tail[3] =
-          (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + size - 1 * sizeof(aes128_t)));
+        tail[0] = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + size - 4 * sizeof(aes128_t)));
+        tail[1] = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + size - 3 * sizeof(aes128_t)));
+        tail[2] = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + size - 2 * sizeof(aes128_t)));
+        tail[3] = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + size - 1 * sizeof(aes128_t)));
 #    endif
         current[0] = aes_encode(hasher.key, tail[0]);
         current[1] = aes_encode(hasher.key, tail[1]);
@@ -593,9 +593,9 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
           aes512_t current[2];
           aes512_t sum;
           tail[0] = _mm512_loadu_si512(
-            (aes512_t*)((uint8_t *)input + size - 2 * sizeof(aes512_t)));
+            (aes512_t*)((uint8_t*)input + size - 2 * sizeof(aes512_t)));
           tail[1] = _mm512_loadu_si512(
-            (aes512_t*)((uint8_t *)input + size - 1 * sizeof(aes512_t)));
+            (aes512_t*)((uint8_t*)input + size - 1 * sizeof(aes512_t)));
           aes128_t keys[4] = {hasher.key, hasher.key, hasher.key, hasher.key};
           current[0] = aes_encode4(_mm512_loadu_si512(keys), tail[0]);
           current[1] = aes_encode4(_mm512_loadu_si512(keys), tail[1]);
@@ -680,12 +680,16 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
       {
         aes128_t a, b;
 #  ifdef AHASH_x86_TARGET
-        a = _mm_lddqu_si128((aes128_t*)((uint8_t *)input + 0 * sizeof(aes128_t)));
-        b = _mm_lddqu_si128((aes128_t*)((uint8_t *)input + size - 1 * sizeof(aes128_t)));
+        a =
+          _mm_lddqu_si128((aes128_t*)((uint8_t*)input + 0 * sizeof(aes128_t)));
+        b = _mm_lddqu_si128(
+          (aes128_t*)((uint8_t*)input + size - 1 * sizeof(aes128_t)));
 
 #  else
-        a = (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + 0 * sizeof(aes128_t)));
-        b = (aes128_t)vld1q_u8((uint8_t*)((uint8_t *)input + size - 1 * sizeof(aes128_t)));
+        a = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + 0 * sizeof(aes128_t)));
+        b = (aes128_t)vld1q_u8(
+          (uint8_t*)((uint8_t*)input + size - 1 * sizeof(aes128_t)));
 #  endif
         return hash2(hasher, a, b);
       }
@@ -870,155 +874,212 @@ uint64_t finish(ahasher_t hasher)
 #  define AVX2_EXTENSION ""
 #endif
 
-kk_define_string_literal(static, AHASH_VERSION, 32, ARCH AES_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION
-AVX512_EXTENSION);
+kk_define_string_literal(
+  static,
+  AHASH_VERSION,
+  32,
+  ARCH AES_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION
+    AVX512_EXTENSION);
 
-typedef struct ahasher_wrapper {
-    struct kk_ahash__hasher_s _base;
-    ahasher_t _inner;
+typedef struct ahasher_wrapper
+{
+  struct kk_ahash__hasher_s _base;
+  ahasher_t _inner;
 } ahasher_wrapper_t;
 
-typedef struct random_state_wrapper {
-    struct kk_ahash__random_state_s _base;
-    random_state_t _inner;
+typedef struct random_state_wrapper
+{
+  struct kk_ahash__random_state_s _base;
+  random_state_t _inner;
 } random_state_wrapper_t;
 
-static kk_string_t kk_ahash_version( void ) {
-    return AHASH_VERSION;
-}
-
-static kk_unit_t reinitialize_global_seed( kk_context_t* _ctx )
+static kk_string_t kk_ahash_version(void)
 {
-    PI2[0] = kk_srandom_uint64(_ctx);
-    PI2[1] = kk_srandom_uint64(_ctx);
-    PI2[2] = kk_srandom_uint64(_ctx);
-    PI2[3] = kk_srandom_uint64(_ctx);
-    return kk_Unit;
+  return AHASH_VERSION;
 }
 
-static kk_ahash__random_state next_random_state( kk_context_t* _ctx ) {
-    random_state_wrapper_t* state = kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
-    state->_inner = new_state();
-    return kk_datatype_from_ptr(&state->_base._block);
+static kk_unit_t reinitialize_global_seed(kk_context_t* _ctx)
+{
+  PI2[0] = kk_srandom_uint64(_ctx);
+  PI2[1] = kk_srandom_uint64(_ctx);
+  PI2[2] = kk_srandom_uint64(_ctx);
+  PI2[3] = kk_srandom_uint64(_ctx);
+  return kk_Unit;
 }
 
-static kk_ahash__random_state seed_state( int32_t seed, kk_context_t* _ctx ) {
-    random_state_wrapper_t* state = kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
-    state->_inner = new_state_from_seed(seed);
-    return kk_datatype_from_ptr(&state->_base._block);
+static kk_ahash__random_state next_random_state(kk_context_t* _ctx)
+{
+  random_state_wrapper_t* state =
+    kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
+  state->_inner = new_state();
+  return kk_datatype_from_ptr(&state->_base._block);
 }
 
-static kk_ahash__hasher create_hasher( kk_ahash__random_state state, kk_context_t* _ctx ) {
-    random_state_wrapper_t* s = (random_state_wrapper_t*)(state.ptr);
-    ahasher_wrapper_t* hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
-    hasher->_inner = CREATE_HASHER(s->_inner);
-    if (kk_ahash__random_state_is_unique(state)) {
-        kk_ahash__random_state_free(state);
-    } else {
-        kk_ahash__random_state_decref(state, _ctx);
-    }
-    return kk_datatype_from_ptr(&hasher->_base._block);
+static kk_ahash__random_state seed_state(int32_t seed, kk_context_t* _ctx)
+{
+  random_state_wrapper_t* state =
+    kk_block_alloc_as(random_state_wrapper_t, 0, 0, _ctx);
+  state->_inner = new_state_from_seed(seed);
+  return kk_datatype_from_ptr(&state->_base._block);
 }
 
-static kk_integer_t kk_hasher_finish( kk_ahash__hasher hasher, kk_context_t* _ctx ) {
-    /// TODO: it is better to return uint64, but Koka current do no have this type
-    ahasher_wrapper_t* h = (ahasher_wrapper_t*)(hasher.ptr);
-    uint64_t res = finish(h->_inner);
-    if (kk_ahash__hasher_is_unique(hasher)) {
-        kk_ahash__hasher_free(hasher);
-    } else {
-        kk_ahash__hasher_decref(hasher, _ctx);
-    }
-    return kk_integer_from_uint64(res, _ctx);
+static kk_ahash__hasher
+create_hasher(kk_ahash__random_state state, kk_context_t* _ctx)
+{
+  random_state_wrapper_t* s = (random_state_wrapper_t*)(state.ptr);
+  ahasher_wrapper_t* hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
+  hasher->_inner = CREATE_HASHER(s->_inner);
+  if (kk_ahash__random_state_is_unique(state))
+  {
+    kk_ahash__random_state_free(state);
+  }
+  else
+  {
+    kk_ahash__random_state_decref(state, _ctx);
+  }
+  return kk_datatype_from_ptr(&hasher->_base._block);
+}
+
+static kk_integer_t
+kk_hasher_finish(kk_ahash__hasher hasher, kk_context_t* _ctx)
+{
+  /// TODO: it is better to return uint64, but Koka current do no have this type
+  ahasher_wrapper_t* h = (ahasher_wrapper_t*)(hasher.ptr);
+  uint64_t res = finish(h->_inner);
+  if (kk_ahash__hasher_is_unique(hasher))
+  {
+    kk_ahash__hasher_free(hasher);
+  }
+  else
+  {
+    kk_ahash__hasher_decref(hasher, _ctx);
+  }
+  return kk_integer_from_uint64(res, _ctx);
 }
 
 /// FIXME: this is a dirty hack
-typedef struct kk_bigint_s {
-    kk_block_t  _block;
-#if KK_INTPTR_SIZE>=8
-    uint8_t  is_neg: 1;      // negative
-    uint16_t extra :15;      // extra digits available: `sizeof(digits) == (count+extra)*sizeof(kk_digit_t)`
-    uint64_t count :48;      // count of digits in the number
+typedef struct kk_bigint_s
+{
+  kk_block_t _block;
+#if KK_INTPTR_SIZE >= 8
+  uint8_t is_neg : 1; // negative
+  uint16_t extra : 15; // extra digits available: `sizeof(digits) ==
+                       // (count+extra)*sizeof(kk_digit_t)`
+  uint64_t count : 48; // count of digits in the number
 #else
-    uint8_t  is_neg;
-    uint16_t extra;
-    uint32_t count;
+  uint8_t is_neg;
+  uint16_t extra;
+  uint32_t count;
 #endif
-    uint64_t digits[1];      // digits from least-significant to most significant.
+  uint64_t digits[1]; // digits from least-significant to most significant.
 } kk_bigint_t;
 
-static kk_ahash__hasher kk_hasher_write_int( kk_ahash__hasher hasher, kk_integer_t data, kk_context_t* _ctx ) {
-    /// TODO: Do we need type masks
-    ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;
-    if (kk_is_smallint(data)) {
-        h = write_uint64_t(h, data.value);
-    } else {
-        kk_bigint_t* value = (kk_bigint_t*)(data.value);
-        h = write_uint64_t(h, ((uint64_t)value->is_neg << 17) + value->extra);
-        h = hash_write(h, value->digits, sizeof(uint64_t) * value->count);
-    }
-    if (kk_ahash__hasher_is_unique(hasher)) {
-        ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; // reuse
-        return hasher;
-    } else {
-        kk_ahash__hasher_decref(hasher, _ctx);
-        ahasher_wrapper_t* new_hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
-        new_hasher->_inner = h;
-        return kk_datatype_from_ptr(&new_hasher->_base._block);
-    }
+static kk_ahash__hasher kk_hasher_write_int(
+  kk_ahash__hasher hasher, kk_integer_t data, kk_context_t* _ctx)
+{
+  /// TODO: Do we need type masks
+  ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;
+  if (kk_is_smallint(data))
+  {
+    h = write_uint64_t(h, data.value);
+  }
+  else
+  {
+    kk_bigint_t* value = (kk_bigint_t*)(data.value);
+    h = write_uint64_t(h, ((uint64_t)value->is_neg << 17) + value->extra);
+    h = hash_write(h, value->digits, sizeof(uint64_t) * value->count);
+  }
+  if (kk_ahash__hasher_is_unique(hasher))
+  {
+    ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; // reuse
+    return hasher;
+  }
+  else
+  {
+    kk_ahash__hasher_decref(hasher, _ctx);
+    ahasher_wrapper_t* new_hasher =
+      kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
+    new_hasher->_inner = h;
+    return kk_datatype_from_ptr(&new_hasher->_base._block);
+  }
 }
 
-static kk_ahash__hasher kk_hasher_write_str( kk_ahash__hasher hasher, kk_string_t x, kk_context_t* _ctx ) {
-    /// TODO: Do we need type masks
-    ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;
-    struct kk_string_s * data = (struct kk_string_s *)(x.ptr);
-    if (kk_datatype_is_singleton(x)) {
-        h = write_uint64_t(h, 0);
+static kk_ahash__hasher
+kk_hasher_write_str(kk_ahash__hasher hasher, kk_string_t x, kk_context_t* _ctx)
+{
+  /// TODO: Do we need type masks
+  ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;
+  struct kk_string_s* data = (struct kk_string_s*)(x.ptr);
+  if (kk_datatype_is_singleton(x))
+  {
+    h = write_uint64_t(h, 0);
+  }
+  else if (kk_basetype_has_tag(data, KK_TAG_STRING_SMALL))
+  {
+    kk_string_small_t str =
+      kk_basetype_as_assert(kk_string_small_t, data, KK_TAG_STRING_SMALL);
+    h = hash_write(h, str->u.str, strlen((const char*)str->u.str));
+  }
+  else if (kk_basetype_has_tag(data, KK_TAG_STRING))
+  {
+    kk_string_normal_t str =
+      kk_basetype_as_assert(kk_string_normal_t, data, KK_TAG_STRING);
+    h = hash_write(h, str->str, str->length);
+  }
+  else if (kk_basetype_has_tag(data, KK_TAG_STRING_RAW))
+  {
+    kk_string_raw_t str =
+      kk_basetype_as_assert(kk_string_raw_t, data, KK_TAG_STRING_RAW);
+    h = hash_write(h, str->cstr, str->length);
+  }
+  // clean up string
+  if (!kk_datatype_is_singleton(x))
+  {
+    if (kk_datatype_is_unique(x))
+    {
+      kk_string_drop(x, _ctx);
     }
-    else if (kk_basetype_has_tag(data, KK_TAG_STRING_SMALL)) {
-        kk_string_small_t str = kk_basetype_as_assert(kk_string_small_t, data, KK_TAG_STRING_SMALL);
-        h = hash_write(h, str->u.str, strlen((const char *)str->u.str));
-    } else if (kk_basetype_has_tag(data, KK_TAG_STRING)) {
-        kk_string_normal_t str = kk_basetype_as_assert(kk_string_normal_t, data, KK_TAG_STRING);
-        h = hash_write(h, str->str, str->length);
-    } else if (kk_basetype_has_tag(data, KK_TAG_STRING_RAW)) {
-        kk_string_raw_t str = kk_basetype_as_assert(kk_string_raw_t, data, KK_TAG_STRING_RAW);
-        h = hash_write(h, str->cstr, str->length);
+    else
+    {
+      kk_datatype_decref(x, _ctx);
     }
-    // clean up string
-    if (!kk_datatype_is_singleton(x)) {
-        if (kk_datatype_is_unique(x)) {
-            kk_string_drop(x, _ctx);
-        } else {
-            kk_datatype_decref(x, _ctx);
-        }
-    }
-    // clean up hasher
-    if (kk_ahash__hasher_is_unique(hasher)) {
-        ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; // reuse
-        return hasher;
-    } else {
-        kk_ahash__hasher_decref(hasher, _ctx);
-        ahasher_wrapper_t* new_hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
-        new_hasher->_inner = h;
-        return kk_datatype_from_ptr(&new_hasher->_base._block);
-    }
+  }
+  // clean up hasher
+  if (kk_ahash__hasher_is_unique(hasher))
+  {
+    ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; // reuse
+    return hasher;
+  }
+  else
+  {
+    kk_ahash__hasher_decref(hasher, _ctx);
+    ahasher_wrapper_t* new_hasher =
+      kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx);
+    new_hasher->_inner = h;
+    return kk_datatype_from_ptr(&new_hasher->_base._block);
+  }
 }
 
 #define TRIVIAL_TYPE_WRITE(TYPE) \
-static kk_ahash__hasher kk_hasher_write_##TYPE( kk_ahash__hasher hasher, TYPE data, kk_context_t* _ctx ) { \
-    ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner;                                                   \
-    h = write_uint64_t(h, (uint64_t)(data));                             \
-    if (kk_ahash__hasher_is_unique(hasher)) { \
-        ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; \
-        return hasher; \
-    } else { \
-        kk_ahash__hasher_decref(hasher, _ctx); \
-        ahasher_wrapper_t* new_hasher = kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx); \
-        new_hasher->_inner = h; \
-        return kk_datatype_from_ptr(&new_hasher->_base._block); \
+  static kk_ahash__hasher kk_hasher_write_##TYPE( \
+    kk_ahash__hasher hasher, TYPE data, kk_context_t* _ctx) \
+  { \
+    ahasher_t h = ((ahasher_wrapper_t*)(hasher.ptr))->_inner; \
+    h = write_uint64_t(h, (uint64_t)(data)); \
+    if (kk_ahash__hasher_is_unique(hasher)) \
+    { \
+      ((ahasher_wrapper_t*)(hasher.ptr))->_inner = h; \
+      return hasher; \
     } \
-} \
+    else \
+    { \
+      kk_ahash__hasher_decref(hasher, _ctx); \
+      ahasher_wrapper_t* new_hasher = \
+        kk_block_alloc_as(ahasher_wrapper_t, 0, 0, _ctx); \
+      new_hasher->_inner = h; \
+      return kk_datatype_from_ptr(&new_hasher->_base._block); \
+    } \
+  }
 
 TRIVIAL_TYPE_WRITE(int32_t);
 TRIVIAL_TYPE_WRITE(int16_t);
