@@ -213,27 +213,6 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
           aes_encode(current[0], current[1]),
           aes_encode(current[2], current[3]));
         return hash1(hasher, add_by_64s(sum[0], sum[1]));
-      }
-      else
-      {
-        aes128_t head[2], tail[2];
-#    ifdef AHASH_x86_TARGET
-        head[0] = _mm_lddqu_si128((aes128_t*)(input + 0 * sizeof(aes128_t)));
-        head[1] = _mm_lddqu_si128((aes128_t*)(input + 1 * sizeof(aes128_t)));
-        tail[0] =
-          _mm_lddqu_si128((aes128_t*)(input + size - 2 * sizeof(aes128_t)));
-        tail[1] =
-          _mm_lddqu_si128((aes128_t*)(input + size - 1 * sizeof(aes128_t)));
-#    else
-        head[0] = (aes128_t)vld1q_u8((uint8_t*)(input + 0 * sizeof(aes128_t)));
-        head[1] = (aes128_t)vld1q_u8((uint8_t*)(input + 1 * sizeof(aes128_t)));
-        tail[0] =
-          (aes128_t)vld1q_u8((uint8_t*)(input + size - 2 * sizeof(aes128_t)));
-        tail[1] =
-          (aes128_t)vld1q_u8((uint8_t*)(input + size - 1 * sizeof(aes128_t)));
-#    endif
-        hasher = hash2(hasher, head[0], head[1]);
-        return hash2(hasher, tail[0], tail[1]);
 #  else // x86_64 VAES intruction set
 #    ifdef __AVX512DQ__
         if (size > 128)
@@ -322,6 +301,27 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
 #    endif
 #  endif
       }
+      else
+      {
+        aes128_t head[2], tail[2];
+#  ifdef AHASH_x86_TARGET
+        head[0] = _mm_lddqu_si128((aes128_t*)(input + 0 * sizeof(aes128_t)));
+        head[1] = _mm_lddqu_si128((aes128_t*)(input + 1 * sizeof(aes128_t)));
+        tail[0] =
+          _mm_lddqu_si128((aes128_t*)(input + size - 2 * sizeof(aes128_t)));
+        tail[1] =
+          _mm_lddqu_si128((aes128_t*)(input + size - 1 * sizeof(aes128_t)));
+#  else
+        head[0] = (aes128_t)vld1q_u8((uint8_t*)(input + 0 * sizeof(aes128_t)));
+        head[1] = (aes128_t)vld1q_u8((uint8_t*)(input + 1 * sizeof(aes128_t)));
+        tail[0] =
+          (aes128_t)vld1q_u8((uint8_t*)(input + size - 2 * sizeof(aes128_t)));
+        tail[1] =
+          (aes128_t)vld1q_u8((uint8_t*)(input + size - 1 * sizeof(aes128_t)));
+#  endif
+        hasher = hash2(hasher, head[0], head[1]);
+        return hash2(hasher, tail[0], tail[1]);
+      }
     }
     else
     {
@@ -371,28 +371,28 @@ uint64_t finish(ahasher_t hasher)
 ahasher_t
 hasher_from_random_state(uint64_t k0, uint64_t k1, uint64_t k2, uint64_t k3)
 {
-  ahasher_t result;
-  result.buffer = k0;
-  result.pad = k1;
-  result.extra_keys[0] = k2;
-  result.extra_keys[1] = k3;
-  return result;
+    ahasher_t result;
+    result.buffer = k0;
+    result.pad = k1;
+    result.extra_keys[0] = k2;
+    result.extra_keys[1] = k3;
+    return result;
 }
 
 static AHASH_FAST_PATH ahasher_t update(ahasher_t hasher, int64_t data)
 {
-  hasher.buffer = folded_multiply(data ^ hasher.buffer, AHASH_MULTIPLIER);
-  return hasher;
+    hasher.buffer = folded_multiply(data ^ hasher.buffer, AHASH_MULTIPLIER);
+    return hasher;
 }
 
 static AHASH_FAST_PATH ahasher_t
 update2(ahasher_t hasher, uint64_t data1, uint64_t data2)
 {
-  uint64_t combined =
-    folded_multiply(data1 ^ hasher.extra_keys[0], data2 ^ hasher.extra_keys[1]);
-  hasher.buffer =
-    rotate_left((combined + hasher.buffer) ^ hasher.pad, AHASH_ROT);
-  return hasher;
+    uint64_t combined =
+            folded_multiply(data1 ^ hasher.extra_keys[0], data2 ^ hasher.extra_keys[1]);
+    hasher.buffer =
+            rotate_left((combined + hasher.buffer) ^ hasher.pad, AHASH_ROT);
+    return hasher;
 }
 
 #  define WRITABLE(TYPE) \
@@ -413,80 +413,80 @@ WRITABLE(uint64_t)
 ahasher_t
 hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
 {
-  hasher.buffer = (hasher.buffer + size) * AHASH_MULTIPLIER;
-  if (size > 8)
-  {
-    if (size > 16)
+    hasher.buffer = (hasher.buffer + size) * AHASH_MULTIPLIER;
+    if (size > 8)
     {
-      uint64_t temp[2];
-      memcpy(temp, ((uint8_t*)input + size - 16), 16);
-      hasher = update2(hasher, temp[0], temp[1]);
-      while (size > 16)
-      {
-        memcpy(temp, input, 16);
-        hasher = update2(hasher, temp[0], temp[1]);
-        size -= 16;
-        input = (uint8_t*)input + 16;
-      }
-      return hasher;
+        if (size > 16)
+        {
+            uint64_t temp[2];
+            memcpy(temp, ((uint8_t*)input + size - 16), 16);
+            hasher = update2(hasher, temp[0], temp[1]);
+            while (size > 16)
+            {
+                memcpy(temp, input, 16);
+                hasher = update2(hasher, temp[0], temp[1]);
+                size -= 16;
+                input = (uint8_t*)input + 16;
+            }
+            return hasher;
+        }
+        else
+        {
+            uint64_t temp[2] = {0, 0};
+            memcpy(temp, input, 8);
+            memcpy(temp + 1, input + size - 8, 8);
+            return update2(hasher, temp[0], temp[1]);
+        }
     }
     else
     {
-      uint64_t temp[2] = {0, 0};
-      memcpy(temp, input, 8);
-      memcpy(temp + 1, input + size - 8, 8);
-      return update2(hasher, temp[0], temp[1]);
+        if (size >= 2)
+        {
+            if (size >= 4)
+            {
+                uint64_t temp[2] = {0, 0};
+                memcpy(temp, input, 4);
+                memcpy(temp + 1, input + size - 4, 4);
+                return update2(hasher, temp[0], temp[1]);
+            }
+            else
+            {
+                uint64_t temp[2] = {0, 0};
+                memcpy(temp, input, 2);
+                memcpy(temp + 1, input + size - 1, 1);
+                return update2(hasher, temp[0], temp[1]);
+            }
+        }
+        else
+        {
+            if (size > 0)
+            {
+                return update(hasher, *(uint8_t*)(input));
+            }
+        }
     }
-  }
-  else
-  {
-    if (size >= 2)
-    {
-      if (size >= 4)
-      {
-        uint64_t temp[2] = {0, 0};
-        memcpy(temp, input, 4);
-        memcpy(temp + 1, input + size - 4, 4);
-        return update2(hasher, temp[0], temp[1]);
-      }
-      else
-      {
-        uint64_t temp[2] = {0, 0};
-        memcpy(temp, input, 2);
-        memcpy(temp + 1, input + size - 1, 1);
-        return update2(hasher, temp[0], temp[1]);
-      }
-    }
-    else
-    {
-      if (size > 0)
-      {
-        return update(hasher, *(uint8_t*)(input));
-      }
-    }
-  }
-  return hasher;
+    return hasher;
 }
 
 uint64_t finish(ahasher_t hasher)
 {
-  size_t rot = hasher.buffer & 63;
-  return rotate_left(folded_multiply(hasher.buffer, hasher.pad), rot);
+    size_t rot = hasher.buffer & 63;
+    return rotate_left(folded_multiply(hasher.buffer, hasher.pad), rot);
 }
 #endif
 
 uint64_t ahash64(const void* buf, size_t size, uint64_t seed)
 {
-  uint64_t keys[4] = {
-    0x243f6a8885a308d3ull + seed,
-    0x13198a2e03707344ull ^ seed,
-    0xa4093822299f31d0ull,
-    0x082efa98ec4e6c89ull,
-  };
-  ahasher_t ahasher =
-    hasher_from_random_state(keys[0], keys[1], keys[2], keys[3]);
-  ahasher = hash_write(ahasher, buf, size);
-  return finish(ahasher);
+    uint64_t keys[4] = {
+            0x243f6a8885a308d3ull + seed,
+            0x13198a2e03707344ull ^ seed,
+            0xa4093822299f31d0ull,
+            0x082efa98ec4e6c89ull,
+    };
+    ahasher_t ahasher =
+            hasher_from_random_state(keys[0], keys[1], keys[2], keys[3]);
+    ahasher = hash_write(ahasher, buf, size);
+    return finish(ahasher);
 }
 
 const char* ahash_version(void)
@@ -494,7 +494,7 @@ const char* ahash_version(void)
 #if defined(__x86_64__) || defined(_WIN64)
 #  define ARCH "x86_64"
 #elif defined(__i386__) || defined(_WIN32)
-#  define ARCH "x86"
+    #  define ARCH "x86"
 #elif defined(__arm64__) || defined(__aarch64__) || defined(_M_ARM64)
 #  define ARCH "arm64"
 #elif defined(__arm__) || defined(_M_ARM)
@@ -534,6 +534,6 @@ const char* ahash_version(void)
 #else
 #  define AVX2_EXTENSION ""
 #endif
-  return ARCH AES_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION
-    AVX512_EXTENSION;
+    return ARCH AES_EXTENSION NEON_EXTENSION VAES_EXTENSION AVX2_EXTENSION
+           AVX512_EXTENSION;
 }
