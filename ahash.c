@@ -213,27 +213,6 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
           aes_encode(current[0], current[1]),
           aes_encode(current[2], current[3]));
         return hash1(hasher, add_by_64s(sum[0], sum[1]));
-      }
-      else
-      {
-        aes128_t head[2], tail[2];
-#    ifdef AHASH_x86_TARGET
-        head[0] = _mm_lddqu_si128((aes128_t*)(input + 0 * sizeof(aes128_t)));
-        head[1] = _mm_lddqu_si128((aes128_t*)(input + 1 * sizeof(aes128_t)));
-        tail[0] =
-          _mm_lddqu_si128((aes128_t*)(input + size - 2 * sizeof(aes128_t)));
-        tail[1] =
-          _mm_lddqu_si128((aes128_t*)(input + size - 1 * sizeof(aes128_t)));
-#    else
-        head[0] = (aes128_t)vld1q_u8((uint8_t*)(input + 0 * sizeof(aes128_t)));
-        head[1] = (aes128_t)vld1q_u8((uint8_t*)(input + 1 * sizeof(aes128_t)));
-        tail[0] =
-          (aes128_t)vld1q_u8((uint8_t*)(input + size - 2 * sizeof(aes128_t)));
-        tail[1] =
-          (aes128_t)vld1q_u8((uint8_t*)(input + size - 1 * sizeof(aes128_t)));
-#    endif
-        hasher = hash2(hasher, head[0], head[1]);
-        return hash2(hasher, tail[0], tail[1]);
 #  else // x86_64 VAES intruction set
 #    ifdef __AVX512DQ__
         if (size > 128)
@@ -321,6 +300,27 @@ hash_write(ahasher_t hasher, const void* __restrict__ input, size_t size)
         }
 #    endif
 #  endif
+      }
+      else
+      {
+        aes128_t head[2], tail[2];
+#  ifdef AHASH_x86_TARGET
+        head[0] = _mm_lddqu_si128((aes128_t*)(input + 0 * sizeof(aes128_t)));
+        head[1] = _mm_lddqu_si128((aes128_t*)(input + 1 * sizeof(aes128_t)));
+        tail[0] =
+          _mm_lddqu_si128((aes128_t*)(input + size - 2 * sizeof(aes128_t)));
+        tail[1] =
+          _mm_lddqu_si128((aes128_t*)(input + size - 1 * sizeof(aes128_t)));
+#  else
+        head[0] = (aes128_t)vld1q_u8((uint8_t*)(input + 0 * sizeof(aes128_t)));
+        head[1] = (aes128_t)vld1q_u8((uint8_t*)(input + 1 * sizeof(aes128_t)));
+        tail[0] =
+          (aes128_t)vld1q_u8((uint8_t*)(input + size - 2 * sizeof(aes128_t)));
+        tail[1] =
+          (aes128_t)vld1q_u8((uint8_t*)(input + size - 1 * sizeof(aes128_t)));
+#  endif
+        hasher = hash2(hasher, head[0], head[1]);
+        return hash2(hasher, tail[0], tail[1]);
       }
     }
     else
